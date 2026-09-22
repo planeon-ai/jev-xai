@@ -1,0 +1,26 @@
+seed = 0
+
+[model]
+concurrency = 2
+max_calls = 40
+retries = 0
+cache_mode = "memory"
+
+[ablation]
+max_spans = 4
+
+[stability]
+runs = 2
+top_k = 3
+
+[reproducibility]
+repeat_probe_runs = 1
+min_reproduction_rate = 0.0
+
+[counterfactual]
+call_budget = 30
+max_candidates = 2
+max_features_changed = 2
+
+[evidence]
+formats = ["json"]

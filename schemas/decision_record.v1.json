@@ -1,0 +1,376 @@
+{
+  "$defs": {
+    "CostEnvelope": {
+      "description": "Query cost attached to every result.",
+      "properties": {
+        "n_model_calls": {
+          "default": 0,
+          "title": "N Model Calls",
+          "type": "integer"
+        },
+        "cache_hits": {
+          "default": 0,
+          "title": "Cache Hits",
+          "type": "integer"
+        },
+        "wall_ms": {
+          "default": 0.0,
+          "title": "Wall Ms",
+          "type": "number"
+        }
+      },
+      "title": "CostEnvelope",
+      "type": "object"
+    },
+    "ModelInfo": {
+      "properties": {
+        "provider": {
+          "default": "unknown",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model_name": {
+          "default": "unknown",
+          "title": "Model Name",
+          "type": "string"
+        },
+        "model_version": {
+          "default": "unknown",
+          "title": "Model Version",
+          "type": "string"
+        },
+        "artifact_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Hash"
+        },
+        "fingerprint": {
+          "title": "Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fingerprint"
+      ],
+      "title": "ModelInfo",
+      "type": "object"
+    },
+    "OutputInfo": {
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "probability": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Probability"
+        },
+        "probabilities": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Probabilities",
+          "type": "object"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "OutputInfo",
+      "type": "object"
+    },
+    "ProbeSummary": {
+      "description": "Measured reproducibility of one input.",
+      "properties": {
+        "runs": {
+          "title": "Runs",
+          "type": "integer"
+        },
+        "reproduction_rate": {
+          "title": "Reproduction Rate",
+          "type": "number"
+        },
+        "probability_sigma": {
+          "title": "Probability Sigma",
+          "type": "number"
+        },
+        "noise_floor": {
+          "title": "Noise Floor",
+          "type": "number"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Labels",
+          "type": "array"
+        },
+        "probabilities": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Probabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "runs",
+        "reproduction_rate",
+        "probability_sigma",
+        "noise_floor"
+      ],
+      "title": "ProbeSummary",
+      "type": "object"
+    },
+    "RuntimeInfo": {
+      "properties": {
+        "python_version": {
+          "title": "Python Version",
+          "type": "string"
+        },
+        "package_lock_hash": {
+          "title": "Package Lock Hash",
+          "type": "string"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "container_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Container Digest"
+        },
+        "hardware": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware"
+        }
+      },
+      "required": [
+        "python_version",
+        "package_lock_hash",
+        "seed"
+      ],
+      "title": "RuntimeInfo",
+      "type": "object"
+    },
+    "TraceInfo": {
+      "properties": {
+        "trace_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trace Id"
+        },
+        "span_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Span Id"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Id"
+        },
+        "step_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Index"
+        },
+        "parent_decision_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Decision Id"
+        }
+      },
+      "title": "TraceInfo",
+      "type": "object"
+    }
+  },
+  "description": "One replayable decision.\n\n``input`` is null when the pack was written hash-only or the payload was\nexternalized. ``input_hash`` is always present.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "decision_id": {
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelInfo"
+    },
+    "input": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input"
+    },
+    "input_hash": {
+      "title": "Input Hash",
+      "type": "string"
+    },
+    "input_reachable": {
+      "default": true,
+      "title": "Input Reachable",
+      "type": "boolean"
+    },
+    "input_externalized": {
+      "default": false,
+      "title": "Input Externalized",
+      "type": "boolean"
+    },
+    "output": {
+      "$ref": "#/$defs/OutputInfo"
+    },
+    "threshold": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Threshold"
+    },
+    "policy_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Version"
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeInfo"
+    },
+    "explainer_config": {
+      "additionalProperties": true,
+      "title": "Explainer Config",
+      "type": "object"
+    },
+    "explanations": {
+      "additionalProperties": true,
+      "title": "Explanations",
+      "type": "object"
+    },
+    "cost": {
+      "$ref": "#/$defs/CostEnvelope"
+    },
+    "trace": {
+      "$ref": "#/$defs/TraceInfo"
+    },
+    "cassette_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cassette Key"
+    },
+    "reproducibility": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProbeSummary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "decision_id",
+    "timestamp",
+    "model",
+    "input_hash",
+    "output",
+    "runtime"
+  ],
+  "title": "DecisionRecord",
+  "type": "object"
+}

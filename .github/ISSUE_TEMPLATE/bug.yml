@@ -1,0 +1,19 @@
+name: Bug
+description: Report a defect in jev-xai
+labels: ["bug"]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: jev-xai version
+    validations:
+      required: true

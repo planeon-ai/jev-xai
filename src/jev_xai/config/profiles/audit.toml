@@ -1,0 +1,23 @@
+seed = 42
+
+[model]
+concurrency = 8
+retries = 2
+cache_mode = "cassette"
+
+[stability]
+runs = 20
+top_k = 5
+
+[reproducibility]
+repeat_probe_runs = 5
+min_reproduction_rate = 0.8
+
+[counterfactual]
+call_budget = 200
+max_candidates = 5
+max_features_changed = 3
+
+[evidence]
+redaction_mode = "full"
+formats = ["json", "md", "html"]

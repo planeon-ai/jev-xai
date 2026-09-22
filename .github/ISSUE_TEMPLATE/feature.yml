@@ -1,0 +1,14 @@
+name: Feature
+description: Propose a change to jev-xai
+labels: ["enhancement"]
+body:
+  - type: textarea
+    attributes:
+      label: Problem
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true

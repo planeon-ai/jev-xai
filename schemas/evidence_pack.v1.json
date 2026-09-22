@@ -1,0 +1,52 @@
+{
+  "description": "Merkle manifest stored beside an audit pack.",
+  "properties": {
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "jev_xai_version": {
+      "title": "Jev Xai Version",
+      "type": "string"
+    },
+    "config_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Config Hash"
+    },
+    "members": {
+      "items": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Members",
+      "type": "array"
+    },
+    "merkle_root": {
+      "title": "Merkle Root",
+      "type": "string"
+    },
+    "limitations": {
+      "title": "Limitations",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "jev_xai_version",
+    "members",
+    "merkle_root",
+    "limitations"
+  ],
+  "title": "PackManifest",
+  "type": "object"
+}
