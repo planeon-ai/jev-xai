@@ -29,12 +29,20 @@ jev-xai sends no telemetry and opens no network connection except the model call
 ```python
 from jev_xai import CallableAdapter, DecisionRecorder, load_config
 
+
 def predict(item):
     score = 0.9 if item.get("verified_user") else 0.2
     label = "SAFE" if score >= 0.5 else "UNSAFE"
-    return {"label": label, "probability": score, "probabilities": {"SAFE": score, "UNSAFE": 1 - score}}
+    return {
+        "label": label,
+        "probability": score,
+        "probabilities": {"SAFE": score, "UNSAFE": 1 - score},
+    }
 
-model = CallableAdapter(predict, metadata={"provider": "local", "model_name": "guard", "model_version": "1"})
+
+model = CallableAdapter(
+    predict, metadata={"provider": "local", "model_name": "guard", "model_version": "1"}
+)
 record = DecisionRecorder(model, load_config(profile="quick")).run_sync({"verified_user": True})
 ```
 
