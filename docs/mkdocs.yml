@@ -6,6 +6,7 @@ theme:
   name: material
 nav:
   - Home: index.md
+  - API: api.md
   - Research: research-landscape.md
   - Architecture: architecture.md
   - Explainability: explainability.md
