@@ -40,6 +40,22 @@ record = DecisionRecorder(model, load_config(profile="quick")).run_sync({"verifi
 
 Profiles are `quick`, `audit`, and `ci-gate`. Resolved configuration is hashed into every record (`config_hash`), so two explanations are comparable only when that hash matches.
 
+## API
+
+The contract is [docs/api.md](https://github.com/planeon-ai/jev-xai/blob/main/docs/api.md). It lists every name in `jev_xai.__all__` with inputs and outputs, and a test fails if a public name is missing. The call path:
+
+| Call | Input | Output |
+| --- | --- | --- |
+| `load_config` | profile, file, env, overrides | `JevXaiConfig` |
+| `diagnose` | model and host flags | `Diagnosis` (tier 0–3) |
+| `DecisionRecorder.run` | decision input mapping | `DecisionRecord` |
+| `ReplayEngine.replay` | record, mode `exact` or `current` | `ReplayResult` |
+| `AblationExplainer.explain` | model client, input, `ExplainContext` | `AblationResult` (`delta_p` per field) |
+| `CounterfactualExplainer.explain` | same, plus allowed ranges | `CounterfactualResult` |
+| `ReproducibilityProbe.measure` | client, input, reference label | `ProbeSummary` |
+| `StabilityEvaluator.evaluate` | explainer, model, input | `StabilityResult` |
+| `build_audit_pack` | record, model, config, directory | Merkle pack directory |
+
 ## What the host must provide
 
 `jev-xai doctor` reports a capability tier:
