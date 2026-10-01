@@ -115,6 +115,11 @@ def test_ablation_delta_and_call_count() -> None:
     by_name = {row.feature: row for row in result.rows}
     assert by_name["verified_user"].delta_p is not None
     assert by_name["verified_user"].delta_p > 0
+    assert by_name["verified_user"].noop is False
+    sanctions = by_name["sanctions_match"]
+    assert sanctions.noop is True
+    assert sanctions.delta_p is None
+    assert sanctions.ablated_probability is None
     assert any(row.scope == "group" for row in result.rows)
     assert any(row.scope == "text_span" for row in result.rows)
     assert result.masking_policy["structured"] == "neutral"
@@ -145,7 +150,7 @@ def test_noise_floor_flags_tiny_deltas() -> None:
         probe = await ReproducibilityProbe(config).measure(client, instance, reference_label="SAFE")
         context = ExplainContext(
             features=[
-                FeatureSpec(name="tiny", kind="numeric", baseline=0),
+                FeatureSpec(name="tiny", kind="numeric", baseline=1),
                 FeatureSpec(name="risk", kind="numeric", baseline=0),
             ]
         )

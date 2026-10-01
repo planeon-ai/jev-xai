@@ -19,9 +19,12 @@ def render_html(pack: dict[str, Any]) -> str:
     for row in rows:
         delta = row.get("delta_p")
         width = 0 if delta is None or peak == 0 else abs(delta) / peak * 100
-        muted = " muted" if row.get("below_noise_floor") else ""
+        muted = " muted" if row.get("below_noise_floor") or row.get("noop") else ""
         label = html.escape(str(row.get("feature")))
-        shown = "n/a" if delta is None else f"{delta:.4f}"
+        if row.get("noop"):
+            shown = "noop"
+        else:
+            shown = "n/a" if delta is None else f"{delta:.4f}"
         bars.append(
             f'<div class="row{muted}"><span class="name">{label}</span>'
             f'<span class="track"><span class="bar" style="width:{width:.1f}%"></span></span>'

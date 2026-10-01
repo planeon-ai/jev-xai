@@ -16,6 +16,7 @@ from jev_xai.cli.render import render
 from jev_xai.config.loader import config_hash, load_config
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.evidence.audit import build_audit_pack
+from jev_xai.evidence.gate import gate_failures
 from jev_xai.evidence.schema import read_record
 from jev_xai.evidence.store import EvidenceStore, verify_pack
 from jev_xai.explainers.ablation import AblationExplainer
@@ -232,22 +233,13 @@ def gate(
     min_stability: float = typer.Option(0.8, "--min-stability"),
     min_reproduction_rate: float = typer.Option(0.9, "--min-reproduction-rate"),
 ) -> None:
-    """Fail when stability or reproduction rate is below the threshold."""
+    """Fail when stability, reproduction, or replay evidence misses the threshold."""
 
-    failures: list[str] = []
-    for path in sorted(records.glob("*.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if "stability_score" in payload:
-            if float(payload["stability_score"]) < min_stability:
-                failures.append(f"{path.name}: stability {payload['stability_score']}")
-        if "reproduction_rate" in payload:
-            if float(payload["reproduction_rate"]) < min_reproduction_rate:
-                failures.append(f"{path.name}: reproduction_rate {payload['reproduction_rate']}")
-        if path.name == "decision.json" or "reproducibility" in payload:
-            probe = payload.get("reproducibility") or {}
-            rate = probe.get("reproduction_rate")
-            if rate is not None and float(rate) < min_reproduction_rate:
-                failures.append(f"{path.name}: reproduction_rate {rate}")
+    failures = gate_failures(
+        records,
+        min_stability=min_stability,
+        min_reproduction_rate=min_reproduction_rate,
+    )
     if failures:
         typer.echo("\n".join(failures))
         raise typer.Exit(code=1)

@@ -79,7 +79,7 @@ async def build_audit_pack(
             "note": replay.note,
         },
         "explanation": {
-            "ablation_top": [row.feature for row in ablation.rows[:5]],
+            "ablation_top": [row.feature for row in ablation.rows if not row.noop][:5],
             "config_hash": config_hash(config),
         },
     }
