@@ -33,6 +33,7 @@ from jev_xai.types import CostEnvelope
 
 class StabilityResult(ExplanationResult):
     explainer: str = "stability"
+    measured_explainer: str
     runs: int
     n_failed_runs: int = 0
     failures: list[str] = Field(default_factory=list)
@@ -87,6 +88,7 @@ class StabilityEvaluator:
         successful = [item for item in results if item is not None]
         score = _score(successful, self.config)
         return StabilityResult(
+            measured_explainer=explainer.name,
             runs=total,
             n_failed_runs=failed,
             failures=failures,
@@ -130,6 +132,7 @@ class StabilityEvaluator:
             raise JevXaiError("stability failure tolerance exceeded")
         score = _score(collected, self.config)
         return StabilityResult(
+            measured_explainer=explainer.name,
             runs=total,
             n_failed_runs=len(failures),
             failures=failures,

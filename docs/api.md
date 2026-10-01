@@ -165,7 +165,7 @@ Fresh calls (`use_cache=False`). Sets `client.noise_floor`.
 
 `evaluate_sequential` is the same measurement without a task group. `explain_with_stability(explainer, model, instance, config, *, runs=None, context=None)` is the short form and returns the same object.
 
-**`StabilityResult`:** `runs`, `n_failed_runs`, `failures`, `rank_correlation`, `feature_overlap`, `attribution_variance`, `counterfactual_consistency`, `stability_score` (`stability_score_v1`), `formula`, `explanations`.
+**`StabilityResult`:** `measured_explainer` (the explainer that was repeated), `runs`, `n_failed_runs`, `failures`, `rank_correlation`, `feature_overlap`, `attribution_variance`, `counterfactual_consistency`, `stability_score` (`stability_score_v1`), `formula`, `explanations`. The score is about that explainer only.
 
 ### `assert_stable(result: StabilityResult, min_score=0.8) -> None`
 
@@ -191,7 +191,7 @@ Raises `AssertionError` when `stability_score` is below `min_score`.
 
 ### `build_audit_pack(record, model, config, directory, *, context=None) -> Path`
 
-Requires `record.input` to be a dict. Runs ablation, counterfactual search, stability (at most 3 runs), evidence replay, and behavioral replay. Writes `decision.json`, `explanation.json`, `ablation.json`, `counterfactuals.json`, `stability.json`, `replay.json`, `manifest.json`, `report.md`, and `report.html` under `directory`. Returns that directory. `manifest.json` carries `schema_version`, `jev_xai_version`, `config_hash`, member hashes, `merkle_root`, and `LIMITATIONS`.
+Requires `record.input` to be a dict. Runs ablation, counterfactual search, stability (at most 3 runs of ablation; `measured_explainer` records that), evidence replay, and behavioral replay. Writes `decision.json`, `explanation.json`, `ablation.json`, `counterfactuals.json`, `stability.json`, `replay.json`, `manifest.json`, `report.md`, and `report.html` under `directory`. Returns that directory. `manifest.json` carries `schema_version`, `jev_xai_version`, `config_hash`, member hashes, `merkle_root`, and `LIMITATIONS`.
 
 ## Errors
 

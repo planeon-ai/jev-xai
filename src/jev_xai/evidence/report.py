@@ -68,7 +68,8 @@ def render_markdown(pack: dict[str, Any]) -> str:
             "",
             "## Stability",
             "",
-            f"stability_score_v1 = {stability.get('stability_score')}",
+            f"stability_score_v1 = {stability.get('stability_score')} "
+            f"on {stability.get('measured_explainer') or 'unspecified explainer'}",
             f"rank correlation {stability.get('rank_correlation')}, "
             f"overlap {stability.get('feature_overlap')}, "
             f"failed runs {stability.get('n_failed_runs')}",
