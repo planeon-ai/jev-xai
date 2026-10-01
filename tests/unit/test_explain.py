@@ -12,13 +12,14 @@ from tests.fakes import FlippedModel, NoPredictModel, ScriptedNoise, ThresholdMo
 from jev_xai.config.loader import config_hash, load_config
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.errors import (
+    BudgetExceededError,
     CapabilityError,
     JevXaiError,
     JevXaiUsageError,
     ReplayMismatchError,
     SchemaVersionError,
 )
-from jev_xai.evidence.audit import build_audit_pack
+from jev_xai.evidence.audit import _optional, build_audit_pack
 from jev_xai.evidence.redaction import prepare_input
 from jev_xai.evidence.schema import (
     DecisionRecord,
@@ -29,6 +30,7 @@ from jev_xai.evidence.schema import (
 )
 from jev_xai.evidence.store import EvidenceStore, verify_pack
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
 from jev_xai.model.cassette import Cassette
@@ -341,6 +343,10 @@ def test_audit_pack_merkle_and_hash_only(tmp_path: Path) -> None:
         encoding="utf-8"
     ).lower() or "does not reveal" in (pack / "manifest.json").read_text(encoding="utf-8")
     assert verify_pack(pack)
+    skipped = json.loads((pack / "anchors.json").read_text(encoding="utf-8"))
+    assert skipped["skipped"] is True
+    assert skipped["prerequisite"] == "feature_spec"
+    assert "Skipped (feature_spec)" in (pack / "report.md").read_text(encoding="utf-8")
     html = (pack / "report.html").read_text(encoding="utf-8")
     assert "<script" not in html
     decision = json.loads((pack / "decision.json").read_text(encoding="utf-8"))
@@ -363,6 +369,58 @@ def test_audit_pack_merkle_and_hash_only(tmp_path: Path) -> None:
     store = EvidenceStore(tmp_path / "store")
     key = store.put_object({"a": 1})
     assert store.get_object(key) == {"a": 1}
+
+
+def test_audit_pack_includes_rules_when_features_exist(tmp_path: Path) -> None:
+    config = _cfg(
+        stability={"runs": 2},
+        anchors={"samples": 4, "max_size": 2, "coverage_samples": 8, "call_budget": 40},
+        permutation={"repeats": 2, "call_budget": 20},
+    )
+    record = run(
+        DecisionRecorder(ThresholdModel(), config).run,
+        _safe_input(),
+        decision_id="audit-rules",
+        timestamp="2026-01-01T00:00:00+00:00",
+    )
+    pack = run(
+        build_audit_pack,
+        record,
+        ThresholdModel(),
+        config,
+        tmp_path / "audit",
+        context=FEATURES,
+    )
+    anchors = json.loads((pack / "anchors.json").read_text(encoding="utf-8"))
+    permutation = json.loads((pack / "permutation.json").read_text(encoding="utf-8"))
+    explanation = json.loads((pack / "explanation.json").read_text(encoding="utf-8"))
+    assert anchors.get("skipped") is not True
+    assert "verified_user" in {row["feature"] for row in permutation["rows"]}
+    assert explanation["anchor_sufficient"] in (True, False)
+    assert "verified_user" in explanation["permutation_top"]
+    report = (pack / "report.md").read_text(encoding="utf-8")
+    assert "replay_confirmed" in report
+    assert "## Anchors" in report
+    html = (pack / "report.html").read_text(encoding="utf-8")
+    assert "<script" not in html
+    assert "Precision" in html
+    assert verify_pack(pack)
+
+
+def test_audit_records_a_budget_skip() -> None:
+    config = _cfg()
+    client = _client(ThresholdModel(), config)
+
+    class Spent(AnchorExplainer):
+        async def explain(
+            self, client: ModelClient, instance: object, context: object = None
+        ) -> object:
+            raise BudgetExceededError("model call budget exhausted")
+
+    payload = run(_optional, Spent(config), client, _safe_input(), FEATURES)
+    assert payload["skipped"] is True
+    assert payload["prerequisite"] == "call_budget"
+    assert payload["explainer"] == "anchors"
 
 
 def test_schema_version_and_trace_roundtrip() -> None:

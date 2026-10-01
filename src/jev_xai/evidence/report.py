@@ -54,8 +54,13 @@ def render_markdown(pack: dict[str, Any]) -> str:
         lines.append(
             f"- {changes or 'no change'} => {candidate.get('label')} "
             f"(distance {candidate.get('distance')}, sparsity {candidate.get('sparsity')}, "
-            f"flipped {candidate.get('flipped')})"
+            f"flipped {candidate.get('flipped')}, "
+            f"replay_confirmed {candidate.get('replay_confirmed')})"
         )
+    lines.extend(["", "## Anchors", ""])
+    lines.extend(_anchor_lines(pack.get("anchors") or {}))
+    lines.extend(["", "## Permutation", ""])
+    lines.extend(_permutation_lines(pack.get("permutation") or {}))
     stability = pack.get("stability", {})
     lines.extend(
         [
@@ -80,3 +85,39 @@ def render_markdown(pack: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _anchor_lines(payload: dict[str, Any]) -> list[str]:
+    if payload.get("skipped"):
+        return [f"Skipped ({payload.get('prerequisite')}): {payload.get('fix')}"]
+    predicates = payload.get("predicates") or []
+    parts: list[str] = []
+    for predicate in predicates:
+        if predicate.get("op") == "within":
+            parts.append(
+                f"{predicate.get('feature')} within [{predicate.get('low')}, {predicate.get('high')}]"
+            )
+        else:
+            parts.append(f"{predicate.get('feature')} = {predicate.get('value')}")
+    rule = " AND ".join(parts) if parts else "no predicate"
+    return [
+        f"Rule: {rule}",
+        f"Precision {payload.get('precision')}, coverage {payload.get('coverage')}, "
+        f"sufficient {payload.get('sufficient')}.",
+    ]
+
+
+def _permutation_lines(payload: dict[str, Any]) -> list[str]:
+    if payload.get("skipped"):
+        return [f"Skipped ({payload.get('prerequisite')}): {payload.get('fix')}"]
+    lines = [
+        "| Feature | Importance | Label flip rate |",
+        "| --- | ---: | ---: |",
+    ]
+    for row in payload.get("rows") or []:
+        lines.append(
+            f"| {row.get('feature')} | {row.get('importance')} | {row.get('label_flip_rate')} |"
+        )
+    if len(lines) == 2:
+        lines.append("| — | — | — |")
+    return lines

@@ -213,16 +213,32 @@ def audit(
     path: Path = typer.Argument(..., help="decision.json"),
     model: str = typer.Option(..., "--model"),
     out: Path = typer.Option(Path("audit"), "--out"),
+    context_path: Path | None = typer.Option(None, "--context", help="ExplainContext JSON"),
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     store_dir: Path | None = typer.Option(None, "--store"),
 ) -> None:
-    """Write an audit pack with a Merkle manifest, Markdown, and HTML."""
+    """Write an audit pack with a Merkle manifest, Markdown, and HTML.
+
+    ``--context`` is required for anchors and permutation. Without it those
+    pack members record the missing prerequisite.
+    """
 
     record = read_record(json.loads(path.read_text(encoding="utf-8")))
     resolved = _config(profile, config)
     store = EvidenceStore(store_dir) if store_dir else None
-    run_sync(build_audit_pack, record, _model(model), resolved, out, store=store)
+    context = None
+    if context_path is not None:
+        context = ExplainContext.model_validate_json(context_path.read_text(encoding="utf-8"))
+    run_sync(
+        build_audit_pack,
+        record,
+        _model(model),
+        resolved,
+        out,
+        context=context,
+        store=store,
+    )
     ok = verify_pack(out)
     typer.echo(f"{out} verified={ok} config_hash={config_hash(resolved)}")
 
