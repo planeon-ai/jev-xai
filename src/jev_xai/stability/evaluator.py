@@ -192,9 +192,10 @@ def _vectors(
             attributions.append({name: result.precision for name in names})
             change_sets.append(frozenset(names))
         elif isinstance(result, PermutationResult):
-            ranked = _sort_permutations(result.rows)
+            measured_rows = [row for row in result.rows if not row.unmeasured]
+            ranked = _sort_permutations(measured_rows)
             rankings.append([row.feature for row in ranked])
-            attributions.append({row.feature: row.importance or 0.0 for row in result.rows})
+            attributions.append({row.feature: row.importance or 0.0 for row in measured_rows})
             change_sets.append(frozenset())
         elif isinstance(result, ShapResult):
             ranked_shap = _sort_shap(result.rows)

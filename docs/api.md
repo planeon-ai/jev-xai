@@ -141,7 +141,7 @@ Precision counts model calls. Coverage does not: it is the fraction of unconditi
 
 **Returns** `label`, `scope` (`local` or `dataset`), `rows`.
 
-**`PermutationRow`:** `feature`, `importance` (mean drop in P(original label); `null` when the model returns no probability), `label_flip_rate`, `n_samples`. Immutable features are omitted. A feature with no alternative value has importance `0` when a probability exists.
+**`PermutationRow`:** `feature`, `importance` (mean drop in P(original label); `null` when the model returns no probability or the feature was not sampled), `label_flip_rate`, `n_samples`, `unmeasured`. Immutable features are omitted. `unmeasured` is true when no alternative was drawn, including a feature whose domain cannot move and a row stopped by the call budget. That is not evidence of zero effect.
 
 ### `ShapExplainer(config, *, seed=None).explain(client, instance, context=None) -> ShapResult`
 

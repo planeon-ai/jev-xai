@@ -165,6 +165,6 @@ async def _optional(
 def _permutation_top(payload: dict[str, Any]) -> list[str]:
     if payload.get("skipped"):
         return []
-    rows = list(payload.get("rows") or [])
+    rows = [row for row in payload.get("rows") or [] if not row.get("unmeasured")]
     rows.sort(key=lambda row: abs(row.get("importance") or 0.0), reverse=True)
     return [str(row.get("feature")) for row in rows[:5]]

@@ -10,6 +10,7 @@ from jev_xai.adapters.capabilities import diagnose
 from jev_xai.config.loader import load_config
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.errors import CapabilityError, JevXaiUsageError
+from jev_xai.evidence.report import render_markdown
 from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.permutation import PermutationExplainer
@@ -142,9 +143,22 @@ def test_permutation_ranks_verification_above_an_inert_note() -> None:
     by_name = {row.feature: row for row in result.rows}
     assert "customer_id" not in by_name
     assert by_name["verified_user"].importance is not None
-    assert by_name["note"].importance == 0.0
-    assert by_name["verified_user"].importance > by_name["note"].importance
-    assert by_name["verified_user"].label_flip_rate > by_name["note"].label_flip_rate
+    assert by_name["verified_user"].unmeasured is False
+    note = by_name["note"]
+    assert note.unmeasured is True
+    assert note.importance is None
+    assert note.n_samples == 0
+    assert by_name["verified_user"].importance > 0
+    page = render_markdown(
+        {
+            "decision": {"output": {}},
+            "ablation": {"rows": []},
+            "counterfactuals": {"candidates": []},
+            "permutation": {"rows": [note.model_dump(mode="json")]},
+            "stability": {},
+        }
+    )
+    assert "| note | unmeasured |" in page
     dataset = anyio.run(
         PermutationExplainer(config).explain_dataset,
         _client(ThresholdModel(), config),
@@ -155,6 +169,9 @@ def test_permutation_ranks_verification_above_an_inert_note() -> None:
     verified = next(row for row in dataset.rows if row.feature == "verified_user")
     assert verified.importance is not None
     assert verified.importance > 0
+    note_avg = next(row for row in dataset.rows if row.feature == "note")
+    assert note_avg.unmeasured is True
+    assert note_avg.importance is None
     tight = _cfg(permutation={"repeats": 4, "call_budget": 1})
     stopped = anyio.run(
         PermutationExplainer(tight).explain,

@@ -122,7 +122,8 @@ def _permutation_html(payload: dict[str, Any]) -> str:
     items: list[str] = []
     for row in payload.get("rows") or []:
         feature = html.escape(str(row.get("feature")))
-        importance = html.escape(str(row.get("importance")))
+        raw = "unmeasured" if row.get("unmeasured") else row.get("importance")
+        importance = html.escape(str(raw))
         rate = html.escape(str(row.get("label_flip_rate")))
         items.append(f"<li>{feature}: {importance} · flip rate {rate}</li>")
     return f"<ul>{''.join(items) or '<li>None</li>'}</ul>"
