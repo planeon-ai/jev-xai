@@ -21,7 +21,7 @@ Algorithm: greedy coordinate descent over a per-feature quantile grid, then a sp
 
 Plausibility in V1 means user-supplied ranges and categorical value sets. There is no density model. Immutable features are never changed.
 
-`flipped` is the search result. `replay_confirmed` is a second `predict` of that same candidate with the cache bypassed. A budget miss leaves it false. `success_rate` counts only confirmed flips. `jev-xai gate` fails a pack that contains an unconfirmed flip. This is not a replay mode.
+`label` and `flipped` come from the search call. `confirmed_label` is a second `predict` of that same candidate with the cache bypassed. `replay_confirmed` is true only when that second label still flips. A budget miss leaves `confirmed_label` null and `replay_confirmed` false. `success_rate` counts only confirmed flips. `jev-xai gate` fails a pack that contains an unconfirmed flip. This is not a replay mode.
 
 ## Anchors
 

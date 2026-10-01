@@ -11,6 +11,7 @@
 - `replay_confirmed` is an uncached second call of the finished counterfactual. `success_rate` counts only that confirmation. `jev-xai gate` fails when a candidate flipped and the confirmation did not.
 - Stability runs call the model instead of a warm cache, and they do not write those calls back to the cache or the cassette.
 - Permutation marks a feature that was not sampled as `unmeasured` with null importance. A missing alternative or a spent call budget is not reported as zero effect.
+- Counterfactual candidates record `confirmed_label` from the uncached second call. `label` stays the search result, so a reverted confirmation is visible beside the flip.
 
 ## 0.1.0a0
 

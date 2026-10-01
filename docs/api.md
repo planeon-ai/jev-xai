@@ -125,7 +125,7 @@ Search stays inside `allowed_values`, `allowed_range`, and `config.counterfactua
 
 **Returns** `original_label`, `desired_label`, `candidates`, `success_rate`, `algorithm`.
 
-**`CounterfactualCandidate`:** `changes` (`feature`, `before`, `after`), `label`, `probability`, `distance`, `sparsity`, `margin`, `flipped` (the search result), `below_noise_floor`, `replay_confirmed` (an uncached second call of the finished candidate; false when that call does not flip or the budget is spent). `success_rate` counts only confirmed flips.
+**`CounterfactualCandidate`:** `changes` (`feature`, `before`, `after`), `label` and `probability` (the search call), `distance`, `sparsity`, `margin`, `flipped` (whether that search call flipped), `below_noise_floor`, `confirmed_label` and `confirmed_probability` (the uncached second call; null when the budget is spent), `replay_confirmed` (true only when that second call still flips). `success_rate` counts only confirmed flips.
 
 ### `AnchorExplainer(config, *, seed=None).explain(client, instance, context=None) -> AnchorResult`
 

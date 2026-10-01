@@ -53,7 +53,8 @@ def render_markdown(pack: dict[str, Any]) -> str:
         )
         lines.append(
             f"- {changes or 'no change'} => {candidate.get('label')} "
-            f"(distance {candidate.get('distance')}, sparsity {candidate.get('sparsity')}, "
+            f"(confirmed {candidate.get('confirmed_label')}, "
+            f"distance {candidate.get('distance')}, sparsity {candidate.get('sparsity')}, "
             f"flipped {candidate.get('flipped')}, "
             f"replay_confirmed {candidate.get('replay_confirmed')})"
         )

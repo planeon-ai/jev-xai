@@ -41,6 +41,7 @@ def render_html(pack: dict[str, Any]) -> str:
             "<li>"
             + (", ".join(parts) or "no change")
             + f" → <strong>{html.escape(str(candidate.get('label')))}</strong>"
+            + f" · confirmed {html.escape(str(candidate.get('confirmed_label')))}"
             + f" · flipped {html.escape(str(candidate.get('flipped')))}"
             + f" · replay_confirmed {html.escape(str(candidate.get('replay_confirmed')))}</li>"
         )
