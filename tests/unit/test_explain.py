@@ -182,7 +182,9 @@ def test_counterfactual_respects_immutable_features_and_can_flip() -> None:
     free = _cfg()
     client = _client(ThresholdModel(), free)
     found = anyio.run(CounterfactualExplainer(free).explain, client, unsafe, FEATURES)
-    assert any(candidate.flipped and candidate.replay_confirmed for candidate in found.candidates)
+    confirmed = [candidate for candidate in found.candidates if candidate.replay_confirmed]
+    assert confirmed
+    assert all(candidate.confirmed_label == candidate.label for candidate in confirmed)
     assert found.success_rate > 0
     assert found.cost.n_model_calls <= free.counterfactual.call_budget
 
@@ -226,9 +228,13 @@ def test_second_call_can_refuse_a_flip() -> None:
         },
         FEATURES,
     )
-    assert any(
-        candidate.flipped and not candidate.replay_confirmed for candidate in found.candidates
-    )
+    refused = [
+        candidate
+        for candidate in found.candidates
+        if candidate.flipped and not candidate.replay_confirmed
+    ]
+    assert refused
+    assert all(candidate.confirmed_label not in (None, candidate.label) for candidate in refused)
     assert found.success_rate == 0
 
 
@@ -257,9 +263,13 @@ def test_confirmation_is_not_claimed_when_the_model_budget_is_spent(
         },
         FEATURES,
     )
-    assert any(
-        candidate.flipped and not candidate.replay_confirmed for candidate in found.candidates
-    )
+    missed = [
+        candidate
+        for candidate in found.candidates
+        if candidate.flipped and not candidate.replay_confirmed
+    ]
+    assert missed
+    assert all(candidate.confirmed_label is None for candidate in missed)
     assert found.success_rate == 0
 
 

@@ -35,6 +35,8 @@ class CounterfactualCandidate(ExplanationResult):
     flipped: bool
     below_noise_floor: bool = False
     replay_confirmed: bool = False
+    confirmed_label: str | None = None
+    confirmed_probability: float | None = None
 
 
 class CounterfactualResult(ExplanationResult):
@@ -175,7 +177,8 @@ class CounterfactualExplainer(Explainer):
         )
         final = await client.predict(current)
         flipped = _flipped(final, baseline.label, desired)
-        confirmed = await _confirm(client, current, baseline.label, desired, calls_at_start, cfg)
+        fresh = await _confirm(client, current, calls_at_start, cfg)
+        confirmed = fresh is not None and _flipped(fresh, baseline.label, desired)
         margin = _margin(final, baseline)
         below = (
             client.noise_floor is not None
@@ -192,6 +195,8 @@ class CounterfactualExplainer(Explainer):
             flipped=flipped,
             below_noise_floor=below,
             replay_confirmed=confirmed,
+            confirmed_label=None if fresh is None else fresh.label,
+            confirmed_probability=None if fresh is None else fresh.probability,
             noise_floor=client.noise_floor,
         )
 
@@ -284,21 +289,18 @@ def _range_for(
 async def _confirm(
     client: ModelClient,
     instance: Mapping[str, Any],
-    original_label: str,
-    desired: str | None,
     calls_at_start: int,
     cfg: CounterfactualConfig,
-) -> bool:
-    """Ask the model once more, bypassing the cache. A budget miss is not confirmation."""
+) -> Prediction | None:
+    """Ask the model once more, bypassing the cache. A budget miss returns no prediction."""
 
     used = client.cost().n_model_calls - calls_at_start
     if used >= cfg.call_budget:
-        return False
+        return None
     try:
-        fresh = await client.predict(dict(instance), use_cache=False)
+        return await client.predict(dict(instance), use_cache=False)
     except BudgetExceededError:
-        return False
-    return _flipped(fresh, original_label, desired)
+        return None
 
 
 def _flipped(prediction: Prediction, original_label: str, desired: str | None) -> bool:
