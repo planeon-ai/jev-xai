@@ -24,8 +24,10 @@ from jev_xai.errors import (
 from jev_xai.evidence.audit import build_audit_pack
 from jev_xai.evidence.schema import SCHEMA_VERSION, DecisionRecord
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.permutation import PermutationExplainer
 from jev_xai.limitations import LIMITATIONS
 from jev_xai.model.client import ModelClient
 from jev_xai.replay.diff import cross_version_diff
@@ -43,6 +45,7 @@ __all__ = [
     "LIMITATIONS",
     "__version__",
     "AblationExplainer",
+    "AnchorExplainer",
     "BudgetExceededError",
     "CallableAdapter",
     "CapabilityError",
@@ -58,6 +61,7 @@ __all__ = [
     "JevXaiUsageError",
     "ModelCallError",
     "ModelClient",
+    "PermutationExplainer",
     "ReplayEngine",
     "ReplayMismatchError",
     "ReproducibilityProbe",

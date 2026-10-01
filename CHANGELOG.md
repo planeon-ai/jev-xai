@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Anchors: greedy high-precision rules over `FeatureSpec` predicates, with precision from seeded model samples and coverage that does not call the model.
+- Permutation importance: local sensitivity and a dataset average. Importance is the mean drop in P(original label). Label flip rate is still reported when the model returns no probability.
+
 ## 0.1.0a0
 
 Initial alpha of the accountability layer: configurable ablation and counterfactual evidence, cassette-backed evidence replay, live behavioral reproduction, cross-version diff, stability scoring (`stability_score_v1`), content-addressed audit packs, and a CLI.

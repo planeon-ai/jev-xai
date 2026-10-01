@@ -18,7 +18,7 @@ A model call may return a label string, a `(label, probability)` pair, or a dict
 
 Later sources win: defaults, named profile (`quick`, `audit`, `ci-gate`), project TOML `path`, `JEV_XAI_*` environment (`__` nests keys), `cli` dict, then `overrides`.
 
-**Returns** `JevXaiConfig`: `seed`, `threshold`, `policy_version`, and nested `model`, `ablation`, `counterfactual`, `stability`, `reproducibility`, `replay`, `evidence`.
+**Returns** `JevXaiConfig`: `seed`, `threshold`, `policy_version`, and nested `model`, `ablation`, `counterfactual`, `anchors`, `permutation`, `stability`, `reproducibility`, `replay`, `evidence`.
 
 ### `config_hash(config: JevXaiConfig) -> str`
 
@@ -126,6 +126,22 @@ Search stays inside `allowed_values`, `allowed_range`, and `config.counterfactua
 
 **`CounterfactualCandidate`:** `changes` (`feature`, `before`, `after`), `label`, `probability`, `distance`, `sparsity`, `margin`, `flipped`, `below_noise_floor`, `replay_confirmed`.
 
+### `AnchorExplainer(config, *, seed=None).explain(client, instance, context=None) -> AnchorResult`
+
+Greedy rules over mutable `FeatureSpec` predicates. Boolean, categorical, and text predicates are `eq` to the instance value. Numeric predicates are `within` a band of `numeric_band` times `allowed_range`, clamped to that range. Immutable features and features with only one allowed value are not candidates. The best rule is returned even when precision stays under the threshold.
+
+**Returns** `label`, `predicates` (`feature`, `op` `eq` or `within`, `value`, `low`, `high`), `precision`, `coverage`, `sufficient`, `samples`, `algorithm` (`greedy_anchor`).
+
+Precision counts model calls. Coverage does not: it is the fraction of unconditional perturbations that satisfy the predicates.
+
+### `PermutationExplainer(config, *, seed=None).explain(client, instance, context=None) -> PermutationResult`
+
+**`explain_dataset(client, rows, context=None)`** returns the same object with `scope="dataset"` and averages importance and flip rate across rows. `call_budget` is per row. An empty `rows` sequence raises `JevXaiUsageError`.
+
+**Returns** `label`, `scope` (`local` or `dataset`), `rows`.
+
+**`PermutationRow`:** `feature`, `importance` (mean drop in P(original label); `null` when the model returns no probability), `label_flip_rate`, `n_samples`. Immutable features are omitted. A feature with no alternative value has importance `0` when a probability exists.
+
 ### `ReproducibilityProbe(config).measure(client, instance, *, reference_label) -> ProbeSummary`
 
 Fresh calls (`use_cache=False`). Sets `client.noise_floor`.
@@ -184,7 +200,7 @@ Install `jev-xai[cli]`. The console script is `jev-xai`. Global options on the c
 | `doctor` | `--model module:callable`, optional `--source` JSONL, `--format` | `Diagnosis` as json, md, html, or table |
 | `import` | JSONL path, `--out` directory | one `DecisionRecord` JSON per decision, plus the tier name |
 | `record` | `--model`, `--input` JSON object, `--out`, optional `--cassette` | path of the written `DecisionRecord` |
-| `explain` | `--model`, `--input`, `--explainer` `ablation` or `counterfactual` | `AblationResult` or `CounterfactualResult` |
+| `explain` | `--model`, `--input`, `--explainer` `ablation`, `counterfactual`, `anchors`, or `permutation`, optional `--context` ExplainContext JSON | the matching result object |
 | `replay` | `decision.json`, `--mode` `exact` or `current`, optional `--model` and `--cassette` | `ReplayResult` |
 | `diff` | `--records` directory of JSON, `--model` | `DiffReport` |
 | `audit` | `decision.json`, `--model`, `--out` | pack directory. Prints `verified` and `config_hash` |
@@ -219,6 +235,10 @@ Install `jev-xai[cli]`. The console script is `jev-xai`. Global options on the c
 ::: jev_xai.explainers.ablation.AblationExplainer
 
 ::: jev_xai.explainers.counterfactual.CounterfactualExplainer
+
+::: jev_xai.explainers.anchors.AnchorExplainer
+
+::: jev_xai.explainers.permutation.PermutationExplainer
 
 ::: jev_xai.replay.repeatability.ReproducibilityProbe
 
