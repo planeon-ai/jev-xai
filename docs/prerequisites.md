@@ -4,9 +4,9 @@ The library cannot explain an input it cannot see, and it cannot perturb a model
 
 | Prerequisite | If missing |
 | --- | --- |
-| Model re-invocation | ablation, counterfactuals, and stability stay off |
+| Model re-invocation | ablation, counterfactuals, anchors, permutation, and stability stay off |
 | Reachable input (not only a hash) | only evidence replay of the stored record |
-| `FeatureSpec` | ablation is one whole-input mask |
+| `FeatureSpec` | ablation is one whole-input mask; anchors and permutation stay off |
 | Calibrated probabilities | delta-P is omitted; label flips remain |
 | Model fingerprint and a record corpus | cross-version replay stays off |
 

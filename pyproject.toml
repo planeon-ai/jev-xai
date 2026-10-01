@@ -47,7 +47,9 @@ jev-xai = "jev_xai.cli.main:main"
 
 [project.entry-points."jev_xai.explainers"]
 ablation = "jev_xai.explainers.ablation:AblationExplainer"
+anchors = "jev_xai.explainers.anchors:AnchorExplainer"
 counterfactual = "jev_xai.explainers.counterfactual:CounterfactualExplainer"
+permutation = "jev_xai.explainers.permutation:PermutationExplainer"
 
 [project.entry-points."jev_xai.adapters"]
 callable = "jev_xai.adapters.callable:CallableAdapter"

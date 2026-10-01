@@ -19,6 +19,20 @@ Algorithm: greedy coordinate descent over a per-feature quantile grid, then a sp
 
 Plausibility in V1 means user-supplied ranges and categorical value sets. There is no density model. Immutable features are never changed.
 
+## Anchors
+
+A greedy search builds a short rule that keeps the original label. Each predicate is either `eq` (boolean, categorical, text) or `within` a numeric band. Precision is the fraction of seeded samples, with those predicates held, that still predict the original label. Coverage is how often a fully random perturbation satisfies the rule, and that estimate does not call the model.
+
+Search stops at `anchors.precision`, `max_size`, or `call_budget`. `sufficient` is true only when precision reached the threshold. Otherwise the best rule found so far is still returned.
+
+Immutable features never appear. A feature whose declared domain has only the instance value cannot move the prediction, so it is not a candidate.
+
+## Permutation importance
+
+For each mutable feature, `repeats` draws replace that feature with another value from its domain. Importance is the mean drop in P(original label). `label_flip_rate` is reported even when the model returns no probability; in that case `importance` is null.
+
+`explain_dataset` averages those rows across instances. The call budget is per instance, not across the dataset. Immutable features are skipped.
+
 ## stability_score_v1
 
 Weights live on `StabilityConfig.score_weights` and must sum to 1. Defaults:

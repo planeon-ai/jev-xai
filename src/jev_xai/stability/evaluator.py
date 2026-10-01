@@ -17,9 +17,11 @@ from jev_xai.config.loader import config_hash
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.errors import JevXaiError
 from jev_xai.explainers.ablation import AblationResult
+from jev_xai.explainers.anchors import AnchorResult
 from jev_xai.explainers.base import Explainer, ExplanationResult
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualResult
+from jev_xai.explainers.permutation import PermutationResult, PermutationRow
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
 from jev_xai.replay.seeding import spawn_seeds
@@ -179,6 +181,16 @@ def _vectors(
             rankings.append(features)
             attributions.append({name: float(index + 1) for index, name in enumerate(features)})
             change_sets.append(frozenset(features))
+        elif isinstance(result, AnchorResult):
+            names = [predicate.feature for predicate in result.predicates]
+            rankings.append(names)
+            attributions.append({name: result.precision for name in names})
+            change_sets.append(frozenset(names))
+        elif isinstance(result, PermutationResult):
+            ranked = _sort_permutations(result.rows)
+            rankings.append([row.feature for row in ranked])
+            attributions.append({row.feature: row.importance or 0.0 for row in result.rows})
+            change_sets.append(frozenset())
         else:
             rankings.append([])
             attributions.append({})
@@ -236,6 +248,16 @@ def _score(results: list[ExplanationResult], config: JevXaiConfig) -> dict[str, 
         "counterfactual_consistency": consistency,
         "stability_score": max(0.0, min(1.0, score)),
     }
+
+
+def _sort_permutations(rows: list[PermutationRow]) -> list[PermutationRow]:
+    return sorted(rows, key=_permutation_rank, reverse=True)
+
+
+def _permutation_rank(row: PermutationRow) -> float:
+    if row.importance is None:
+        return -1.0
+    return abs(row.importance)
 
 
 def _rank_vector(ranking: list[str], universe: list[str]) -> list[float]:

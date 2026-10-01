@@ -95,7 +95,10 @@ def diagnose(
                 tier = 3
     notes: list[str] = []
     if reinvocation and input_reachable and not feature_spec:
-        notes.append("no FeatureSpec: ablation is limited to a single whole-input mask")
+        notes.append(
+            "no FeatureSpec: ablation is limited to a single whole-input mask; "
+            "anchors and permutation stay off"
+        )
     if reinvocation and input_reachable and not probabilities:
         notes.append("no probabilities: ablation reports label flips and omits delta-P")
 
@@ -124,6 +127,9 @@ def diagnose(
     if not has_corpus:
         longitudinal_missing.append("record_corpus")
 
+    spec_missing = list(behavioral_missing)
+    if not feature_spec:
+        spec_missing.append("feature_spec")
     explainers = [
         availability("record", True, []),
         availability(
@@ -134,6 +140,18 @@ def diagnose(
         ),
         availability("ablation", tier >= 1, behavioral_missing),
         availability("counterfactual", tier >= 1, behavioral_missing),
+        availability(
+            "anchors",
+            tier >= 1 and feature_spec,
+            spec_missing,
+            note="precision is estimated with model samples; coverage does not call the model",
+        ),
+        availability(
+            "permutation",
+            tier >= 1 and feature_spec,
+            spec_missing,
+            note="importance uses class probability when the model returns one",
+        ),
         availability("stability", tier >= 2, graded_missing),
         availability("cross_version_replay", tier >= 3, longitudinal_missing),
     ]

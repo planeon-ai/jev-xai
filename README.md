@@ -60,6 +60,8 @@ The contract is [docs/api.md](https://github.com/planeon-ai/jev-xai/blob/main/do
 | `ReplayEngine.replay` | record, mode `exact` or `current` | `ReplayResult` |
 | `AblationExplainer.explain` | model client, input, `ExplainContext` | `AblationResult` (`delta_p` per field) |
 | `CounterfactualExplainer.explain` | same, plus allowed ranges | `CounterfactualResult` |
+| `AnchorExplainer.explain` | same | `AnchorResult` (precision, coverage) |
+| `PermutationExplainer.explain` | same | `PermutationResult` (importance, flip rate) |
 | `ReproducibilityProbe.measure` | client, input, reference label | `ProbeSummary` |
 | `StabilityEvaluator.evaluate` | explainer, model, input | `StabilityResult` |
 | `build_audit_pack` | record, model, config, directory | Merkle pack directory |
@@ -71,7 +73,7 @@ The contract is [docs/api.md](https://github.com/planeon-ai/jev-xai/blob/main/do
 | Tier | Name | Unlocks |
 | --- | --- | --- |
 | 0 | record only | cassette evidence replay |
-| 1 | behavioral | ablation and counterfactuals (label flips) |
+| 1 | behavioral | ablation, counterfactuals, anchors, and permutation (label flips) |
 | 2 | graded | delta-P and stability |
 | 3 | longitudinal | cross-version replay |
 
@@ -79,7 +81,7 @@ Reaching tier 1 requires model re-invocation and the actual decision input. A lo
 
 ## Non-goals
 
-jev-xai does not reveal hidden chain-of-thought, prove causal mechanisms inside opaque models, guarantee regulatory compliance, guarantee fairness, guarantee that an attribution score represents internal reasoning, or convert black-box models into inherently interpretable models. It provides behavioral evidence, reproducibility, counterfactual evidence, approximate attribution, and stability measurement.
+jev-xai does not reveal hidden chain-of-thought, prove causal mechanisms inside opaque models, guarantee regulatory compliance, guarantee fairness, guarantee that an attribution score represents internal reasoning, or convert black-box models into inherently interpretable models. It provides behavioral evidence, reproducibility, counterfactual evidence, approximate attribution, anchors, permutation importance, and stability measurement.
 
 The same text is embedded in every evidence-pack manifest.
 

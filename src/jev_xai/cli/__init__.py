@@ -19,8 +19,10 @@ from jev_xai.evidence.audit import build_audit_pack
 from jev_xai.evidence.schema import read_record
 from jev_xai.evidence.store import verify_pack
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.permutation import PermutationExplainer
 from jev_xai.model.cassette import Cassette
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
@@ -123,11 +125,12 @@ def explain(
     model: str = typer.Option(..., "--model"),
     input: Path = typer.Option(..., "--input"),
     explainer: str = typer.Option("ablation", "--explainer"),
+    context_path: Path | None = typer.Option(None, "--context", help="ExplainContext JSON"),
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     fmt: str = typer.Option("table", "--format"),
 ) -> None:
-    """Run one explainer."""
+    """Run one explainer. Anchors and permutation need ``--context``."""
 
     payload = json.loads(input.read_text(encoding="utf-8"))
     resolved = _config(profile, config)
@@ -135,12 +138,20 @@ def explain(
     client = ModelClient(
         live, resolved.model, fingerprint=model_fingerprint(live), seed=resolved.seed
     )
-    engine: Any
-    if explainer == "counterfactual":
-        engine = CounterfactualExplainer(resolved)
-    else:
-        engine = AblationExplainer(resolved)
-    result = run_sync(engine.explain, client, payload, ExplainContext())
+    engines = {
+        "ablation": AblationExplainer,
+        "counterfactual": CounterfactualExplainer,
+        "anchors": AnchorExplainer,
+        "permutation": PermutationExplainer,
+    }
+    if explainer not in engines:
+        raise typer.BadParameter(
+            "explainer must be ablation, counterfactual, anchors, or permutation"
+        )
+    context = ExplainContext()
+    if context_path is not None:
+        context = ExplainContext.model_validate_json(context_path.read_text(encoding="utf-8"))
+    result = run_sync(engines[explainer](resolved).explain, client, payload, context)
     _emit(result, fmt)
 
 

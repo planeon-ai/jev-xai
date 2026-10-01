@@ -7,6 +7,8 @@ JevXaiConfig
     -> ModelClient (batching, cassette, cost)
         -> AblationExplainer
         -> CounterfactualExplainer
+        -> AnchorExplainer
+        -> PermutationExplainer
             -> StabilityEvaluator
 DecisionRecorder -> EvidenceStore -> audit pack
 ReplayEngine: evidence replay | behavioral reproduction | cross-version diff

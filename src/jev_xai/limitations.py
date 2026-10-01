@@ -8,5 +8,5 @@ LIMITATIONS = (
     "guarantee that an attribution score represents internal reasoning, or convert "
     "black-box models into inherently interpretable models. It provides behavioral "
     "evidence, reproducibility, counterfactual evidence, approximate attribution, "
-    "and stability measurement."
+    "anchors, permutation importance, and stability measurement."
 )
