@@ -47,7 +47,10 @@ def test_decision_reproduction_rate_is_read(tmp_path: Path) -> None:
 def test_directory_without_evidence_fails_closed(tmp_path: Path) -> None:
     _write(tmp_path / "explanation.json", {"ablation_top": []})
     failures = gate_failures(tmp_path, min_stability=0.8, min_reproduction_rate=0.9)
-    assert any("no stability, reproduction, or replay evidence" in item for item in failures)
+    assert any(
+        "no stability, reproduction, replay, or counterfactual evidence" in item
+        for item in failures
+    )
 
 
 def test_missing_directory_fails(tmp_path: Path) -> None:
@@ -75,6 +78,33 @@ def test_noop_ablation_is_labeled_in_the_report() -> None:
     }
     assert "| verified_account | noop |" in render_markdown(pack)
     assert ">noop<" in render_html(pack)
+
+
+def test_unconfirmed_counterfactual_fails(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "counterfactuals.json",
+        {
+            "candidates": [
+                {
+                    "flipped": True,
+                    "replay_confirmed": False,
+                    "changes": [{"feature": "verified_user"}],
+                }
+            ]
+        },
+    )
+    failures = gate_failures(tmp_path, min_stability=0.8, min_reproduction_rate=0.9)
+    assert failures == [
+        "counterfactuals.json: counterfactual [verified_user] flipped but was not replay_confirmed"
+    ]
+
+
+def test_confirmed_counterfactual_passes(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "counterfactuals.json",
+        {"candidates": [{"flipped": True, "replay_confirmed": True, "changes": []}]},
+    )
+    assert gate_failures(tmp_path, min_stability=0.8, min_reproduction_rate=0.9) == []
 
 
 def test_numeric_anchor_is_rendered() -> None:

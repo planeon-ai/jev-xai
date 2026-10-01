@@ -21,6 +21,8 @@ Algorithm: greedy coordinate descent over a per-feature quantile grid, then a sp
 
 Plausibility in V1 means user-supplied ranges and categorical value sets. There is no density model. Immutable features are never changed.
 
+`flipped` is the search result. `replay_confirmed` is a second `predict` of that same candidate with the cache bypassed. A budget miss leaves it false. `success_rate` counts only confirmed flips. `jev-xai gate` fails a pack that contains an unconfirmed flip. This is not a replay mode.
+
 ## Anchors
 
 A greedy search builds a short rule that keeps the original label. Each predicate is either `eq` (boolean, categorical, text) or `within` a numeric band. Precision is the fraction of seeded samples, with those predicates held, that still predict the original label. Coverage is how often a fully random perturbation satisfies the rule, and that estimate does not call the model.
@@ -29,7 +31,7 @@ Search stops at `anchors.precision`, `max_size`, or `call_budget`. `sufficient` 
 
 Immutable features never appear. A feature whose declared domain has only the instance value cannot move the prediction, so it is not a candidate.
 
-An audit pack writes `anchors.json` and `permutation.json`. Pass `--context` (or `context=` in Python) with a `FeatureSpec` to fill them. Without that, the files record the missing prerequisite and the rest of the pack is still written. A call-budget miss is recorded the same way. Counterfactual lines include `replay_confirmed`, which is a second call on the final candidate, not a replay mode.
+An audit pack writes `anchors.json` and `permutation.json`. Pass `--context` (or `context=` in Python) with a `FeatureSpec` to fill them. Without that, the files record the missing prerequisite and the rest of the pack is still written. A call-budget miss is recorded the same way.
 
 ## Permutation importance
 
@@ -60,4 +62,4 @@ Decision reproducibility is **not** inside this score. It is `reproduction_rate`
 
 Failed runs are counted. If `n_failed / runs` exceeds `failure_tolerance`, evaluation raises.
 
-`assert_stable(result, min_score=0.8)` and `jev-xai gate` turn the score into a CI check. The gate walks nested records and audit packs. It fails when stability or reproduction rate is below the threshold, when evidence or behavioral replay `matched` is false, or when the directory has none of those fields. Copies under `store/` are not scored again. To load the assertion helper as a pytest plugin, set `pytest_plugins = ["jev_xai.pytest_plugin"]` in your project. It is not auto-loaded, so it does not import jev-xai before coverage starts.
+`assert_stable(result, min_score=0.8)` and `jev-xai gate` turn the score into a CI check. The gate walks nested records and audit packs. It fails when stability or reproduction rate is below the threshold, when evidence or behavioral replay `matched` is false, when a counterfactual flipped without `replay_confirmed`, or when the directory has none of those fields. Copies under `store/` are not scored again. To load the assertion helper as a pytest plugin, set `pytest_plugins = ["jev_xai.pytest_plugin"]` in your project. It is not auto-loaded, so it does not import jev-xai before coverage starts.

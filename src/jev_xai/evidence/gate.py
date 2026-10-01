@@ -17,7 +17,8 @@ def gate_failures(
 
     Walks ``root`` recursively. Copies under ``store/`` or ``objects/`` are skipped
     so a flat audit directory is not scored twice. A directory with no stability,
-    reproduction, or replay field fails closed.
+    reproduction, replay, or counterfactual field fails closed. A flip that was
+    not replay-confirmed fails the gate.
     """
 
     if not root.is_dir():
@@ -36,7 +37,7 @@ def gate_failures(
         if _check(payload, label, failures, min_stability, min_reproduction_rate):
             saw_evidence = True
     if not saw_evidence and not failures:
-        failures.append(f"{root}: no stability, reproduction, or replay evidence")
+        failures.append(f"{root}: no stability, reproduction, replay, or counterfactual evidence")
     return failures
 
 
@@ -87,6 +88,23 @@ def _check(
         if payload.get("matched") is False:
             reason = payload.get("mismatch_reason") or "unmatched"
             failures.append(f"{label}: replay did not match ({reason})")
+    candidates = payload.get("candidates")
+    if isinstance(candidates, list):
+        for index, item in enumerate(candidates):
+            if not isinstance(item, dict) or "replay_confirmed" not in item:
+                continue
+            saw = True
+            if item.get("flipped") is True and item.get("replay_confirmed") is not True:
+                changes = item.get("changes") or []
+                names = [
+                    str(change.get("feature"))
+                    for change in changes
+                    if isinstance(change, dict) and change.get("feature") is not None
+                ]
+                feature = ", ".join(names) if names else str(index)
+                failures.append(
+                    f"{label}: counterfactual [{feature}] flipped but was not replay_confirmed"
+                )
     return saw
 
 

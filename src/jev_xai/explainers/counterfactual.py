@@ -9,6 +9,7 @@ from pydantic import Field
 
 from jev_xai.adapters.capabilities import diagnose, require
 from jev_xai.config.schema import CounterfactualConfig, JevXaiConfig
+from jev_xai.errors import BudgetExceededError
 from jev_xai.explainers.base import Explainer, ExplanationResult
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.model.client import ModelClient
@@ -90,7 +91,7 @@ class CounterfactualExplainer(Explainer):
             if offset + 1 >= self.config.counterfactual.max_candidates:
                 break
         unique = _dedupe(candidates)
-        successes = sum(1 for item in unique if item.flipped)
+        successes = sum(1 for item in unique if item.replay_confirmed)
         rate = successes / len(unique) if unique else 0.0
         return CounterfactualResult(
             original_label=original.label,
@@ -173,7 +174,8 @@ class CounterfactualExplainer(Explainer):
             client, original, current, changes, baseline.label, desired, context, cfg
         )
         final = await client.predict(current)
-        confirmed = _flipped(final, baseline.label, desired)
+        flipped = _flipped(final, baseline.label, desired)
+        confirmed = await _confirm(client, current, baseline.label, desired, calls_at_start, cfg)
         margin = _margin(final, baseline)
         below = (
             client.noise_floor is not None
@@ -187,7 +189,7 @@ class CounterfactualExplainer(Explainer):
             distance=_distance(original, _apply(original, changes), context, cfg),
             sparsity=len(changes),
             margin=margin,
-            flipped=confirmed,
+            flipped=flipped,
             below_noise_floor=below,
             replay_confirmed=confirmed,
             noise_floor=client.noise_floor,
@@ -277,6 +279,26 @@ def _range_for(
     if low == high:
         return numeric - 1.0, numeric + 1.0
     return low, high
+
+
+async def _confirm(
+    client: ModelClient,
+    instance: Mapping[str, Any],
+    original_label: str,
+    desired: str | None,
+    calls_at_start: int,
+    cfg: CounterfactualConfig,
+) -> bool:
+    """Ask the model once more, bypassing the cache. A budget miss is not confirmation."""
+
+    used = client.cost().n_model_calls - calls_at_start
+    if used >= cfg.call_budget:
+        return False
+    try:
+        fresh = await client.predict(dict(instance), use_cache=False)
+    except BudgetExceededError:
+        return False
+    return _flipped(fresh, original_label, desired)
 
 
 def _flipped(prediction: Prediction, original_label: str, desired: str | None) -> bool:
