@@ -17,6 +17,8 @@ audit/
 
 `manifest.json` lists member hashes, a Merkle root, the library version, `schema_version`, `config_hash`, and the limitations text. `verify_pack` recomputes the root. Tampering with a member fails verification.
 
+`stability.json` records `measured_explainer`. The audit pack repeats ablation only, so that score is not a claim about the other explainers in the pack.
+
 Objects in the store are addressed by blake2b of canonical JSON. Writes use a temporary file and `replace`.
 
 Redaction:

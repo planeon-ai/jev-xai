@@ -83,7 +83,8 @@ small {{ color: #57534e; }}
 <div class="panel"><h2>Anchors</h2>{anchors}</div>
 <div class="panel"><h2>Permutation</h2>{permutation}</div>
 <div class="panel"><h2>Stability</h2>
-<p>stability_score_v1 {html.escape(str(stability.get("stability_score")))}</p></div>
+<p>stability_score_v1 {html.escape(str(stability.get("stability_score")))}
+on {html.escape(str(stability.get("measured_explainer") or "unspecified explainer"))}</p></div>
 <div class="panel"><h2>Replay</h2>
 <p>{html.escape(str(replay.get("claim")))} · matched {html.escape(str(replay.get("matched")))}</p>
 <small>{html.escape(str(replay.get("note", "")))}</small></div>

@@ -327,6 +327,8 @@ def test_stability_scores_shap_and_lime(monkeypatch: pytest.MonkeyPatch) -> None
     )
     assert shap.stability_score > 0.9
     assert lime.stability_score > 0.9
+    assert shap.measured_explainer == "shap"
+    assert lime.measured_explainer == "lime"
 
 
 async def _evaluate(

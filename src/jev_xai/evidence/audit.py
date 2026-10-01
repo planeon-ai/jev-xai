@@ -38,6 +38,7 @@ async def build_audit_pack(
 
     Anchors and permutation are included when ``context`` has a ``FeatureSpec``.
     Otherwise those members record the missing prerequisite and the pack is still written.
+    The stability score repeats ablation only. ``measured_explainer`` records that name.
     """
 
     if record.input_externalized:

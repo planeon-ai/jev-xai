@@ -64,6 +64,8 @@ Decision reproducibility is **not** inside this score. It is `reproduction_rate`
 
 Each stability run calls the model. Those calls do not read or write the client cache or the cassette, so an audit that already explained the decision cannot turn a warm cache into a perfect score. The calls still count toward `max_calls`.
 
+`measured_explainer` names the explainer that was repeated. An audit pack repeats `AblationExplainer` only. That score is not evidence that the anchors, permutation, or counterfactuals in the same pack were stable.
+
 Failed runs are counted. If `n_failed / runs` exceeds `failure_tolerance`, evaluation raises.
 
 `assert_stable(result, min_score=0.8)` and `jev-xai gate` turn the score into a CI check. The gate walks nested records and audit packs. It fails when stability or reproduction rate is below the threshold, when evidence or behavioral replay `matched` is false, when a counterfactual flipped without `replay_confirmed`, or when the directory has none of those fields. Copies under `store/` are not scored again. To load the assertion helper as a pytest plugin, set `pytest_plugins = ["jev_xai.pytest_plugin"]` in your project. It is not auto-loaded, so it does not import jev-xai before coverage starts.

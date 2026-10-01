@@ -230,3 +230,5 @@ def test_stability_accepts_anchor_and_permutation_results() -> None:
     )
     assert 0.0 <= anchored.stability_score <= 1.0
     assert 0.0 <= permuted.stability_score <= 1.0
+    assert anchored.measured_explainer == "anchors"
+    assert permuted.measured_explainer == "permutation"

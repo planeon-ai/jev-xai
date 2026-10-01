@@ -297,9 +297,13 @@ def test_stability_parallel_matches_sequential_and_formula() -> None:
         item["rows"] for item in sequential.explanations
     ]
     assert parallel.formula == "stability_score_v1"
+    assert parallel.explainer == "stability"
+    assert parallel.measured_explainer == "ablation"
+    assert sequential.measured_explainer == "ablation"
     assert_stable(parallel, min_score=0.8)
     helper = run(explain_with_stability, explainer, model, instance, config, context=FEATURES)
     assert helper.stability_score == pytest.approx(parallel.stability_score)
+    assert helper.measured_explainer == "ablation"
 
 
 def test_stability_measures_the_model_not_the_warm_cache() -> None:
@@ -475,8 +479,13 @@ def test_audit_pack_merkle_and_hash_only(tmp_path: Path) -> None:
     skipped = json.loads((pack / "anchors.json").read_text(encoding="utf-8"))
     assert skipped["skipped"] is True
     assert skipped["prerequisite"] == "feature_spec"
-    assert "Skipped (feature_spec)" in (pack / "report.md").read_text(encoding="utf-8")
+    report = (pack / "report.md").read_text(encoding="utf-8")
+    assert "Skipped (feature_spec)" in report
+    stability = json.loads((pack / "stability.json").read_text(encoding="utf-8"))
+    assert stability["measured_explainer"] == "ablation"
+    assert "stability_score_v1 = " in report and "on ablation" in report
     html = (pack / "report.html").read_text(encoding="utf-8")
+    assert "on ablation" in html
     assert "<script" not in html
     decision = json.loads((pack / "decision.json").read_text(encoding="utf-8"))
     decision["output"]["label"] = "TAMPERED"
