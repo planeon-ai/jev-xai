@@ -115,9 +115,8 @@ def _permutation_lines(payload: dict[str, Any]) -> list[str]:
         "| --- | ---: | ---: |",
     ]
     for row in payload.get("rows") or []:
-        lines.append(
-            f"| {row.get('feature')} | {row.get('importance')} | {row.get('label_flip_rate')} |"
-        )
+        importance = "unmeasured" if row.get("unmeasured") else row.get("importance")
+        lines.append(f"| {row.get('feature')} | {importance} | {row.get('label_flip_rate')} |")
     if len(lines) == 2:
         lines.append("| — | — | — |")
     return lines

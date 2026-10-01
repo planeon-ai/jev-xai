@@ -2,6 +2,7 @@
 
 Importance is the mean drop in P(original label). When the model returns no
 probability, importance is omitted and ``label_flip_rate`` is the evidence.
+A feature that is not sampled is ``unmeasured``; null importance is not a zero effect.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ class PermutationRow(BaseModel):
     importance: float | None = None
     label_flip_rate: float = 0.0
     n_samples: int = 0
+    unmeasured: bool = False
 
 
 class PermutationResult(ExplanationResult):
@@ -95,17 +97,10 @@ class PermutationExplainer(Explainer):
                 continue
             original_value = instance.get(spec.name)
             if not is_perturbable(spec, original_value):
-                rows.append(
-                    PermutationRow(
-                        feature=spec.name,
-                        importance=0.0 if baseline is not None else None,
-                        label_flip_rate=0.0,
-                        n_samples=0,
-                    )
-                )
+                rows.append(_unmeasured(spec.name))
                 continue
             if _remaining(client, started.n_model_calls, cfg.call_budget) < 1:
-                rows.append(PermutationRow(feature=spec.name, importance=None, n_samples=0))
+                rows.append(_unmeasured(spec.name))
                 continue
             deltas: list[float] = []
             flips = 0
@@ -122,18 +117,15 @@ class PermutationExplainer(Explainer):
                 after = prediction.class_probability(original.label)
                 if baseline is not None and after is not None:
                     deltas.append(baseline - after)
-            importance: float | None
-            if baseline is None:
-                importance = None
-            elif deltas:
-                importance = sum(deltas) / len(deltas)
-            else:
-                importance = 0.0
+            if used == 0:
+                rows.append(_unmeasured(spec.name))
+                continue
+            importance = sum(deltas) / len(deltas) if baseline is not None and deltas else None
             rows.append(
                 PermutationRow(
                     feature=spec.name,
                     importance=importance,
-                    label_flip_rate=flips / used if used else 0.0,
+                    label_flip_rate=flips / used,
                     n_samples=used,
                 )
             )
@@ -157,8 +149,11 @@ def _average(
         importances: list[float] = []
         flips: list[float] = []
         count = 0
+        measured = False
         for part in parts:
             found = next(item for item in part.rows if item.feature == name)
+            if not found.unmeasured:
+                measured = True
             if found.importance is not None:
                 importances.append(found.importance)
             flips.append(found.label_flip_rate)
@@ -170,6 +165,7 @@ def _average(
                 importance=importance,
                 label_flip_rate=sum(flips) / len(flips) if flips else 0.0,
                 n_samples=count,
+                unmeasured=not measured,
             )
         )
     labels = {part.label for part in parts}
@@ -181,6 +177,12 @@ def _average(
         noise_floor=noise_floor,
         cost=cost,
     )
+
+
+def _unmeasured(feature: str) -> PermutationRow:
+    """No draw was made, so a zero importance would not be evidence."""
+
+    return PermutationRow(feature=feature, importance=None, n_samples=0, unmeasured=True)
 
 
 def _remaining(client: ModelClient, started_calls: int, budget: int) -> int:

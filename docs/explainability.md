@@ -39,6 +39,8 @@ For each mutable feature, `repeats` draws replace that feature with another valu
 
 `explain_dataset` averages those rows across instances. The call budget is per instance, not across the dataset. Immutable features are skipped.
 
+A feature that cannot take another value, or that the budget never samples, is `unmeasured`. Its importance is null. A zero there would not mean the feature had no effect. Unmeasured rows are left out of the stability ranking.
+
 ## Optional SHAP and LIME
 
 These are not core dependencies. `pip install jev-xai[shap]` and `pip install jev-xai[lime]` register `ShapExplainer` and `LimeExplainer`.

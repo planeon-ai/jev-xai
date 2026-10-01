@@ -10,6 +10,7 @@
 - Audit packs include anchors and permutation when a `FeatureSpec` is supplied. Without one, or when the call budget is exhausted, those members record why they were skipped. Reports show `replay_confirmed` on counterfactual candidates.
 - `replay_confirmed` is an uncached second call of the finished counterfactual. `success_rate` counts only that confirmation. `jev-xai gate` fails when a candidate flipped and the confirmation did not.
 - Stability runs call the model instead of a warm cache, and they do not write those calls back to the cache or the cassette.
+- Permutation marks a feature that was not sampled as `unmeasured` with null importance. A missing alternative or a spent call budget is not reported as zero effect.
 
 ## 0.1.0a0
 
