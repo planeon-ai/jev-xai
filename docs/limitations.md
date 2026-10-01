@@ -11,4 +11,4 @@ jev-xai does not:
 
 It provides behavioral evidence, reproducibility, counterfactual evidence, approximate attribution, anchors, permutation importance, and stability measurement.
 
-Out of this release: SHAP, LIME, PDF packs, JavaScript dashboards, distributed execution, OpenTelemetry export, model registries, and framework-specific agent SDKs. Anchors and permutation importance are in this release. They are behavioral evidence, not a proof of internal reasoning.
+SHAP and LIME are optional extras (`jev-xai[shap]`, `jev-xai[lime]`), not core dependencies. Out of this release: PDF packs, JavaScript dashboards, distributed execution, OpenTelemetry export, model registries, and framework-specific agent SDKs. Anchors, permutation importance, and the optional attribution adapters are behavioral evidence, not a proof of internal reasoning.

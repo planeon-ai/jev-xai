@@ -33,6 +33,14 @@ For each mutable feature, `repeats` draws replace that feature with another valu
 
 `explain_dataset` averages those rows across instances. The call budget is per instance, not across the dataset. Immutable features are skipped.
 
+## Optional SHAP and LIME
+
+These are not core dependencies. `pip install jev-xai[shap]` and `pip install jev-xai[lime]` register `ShapExplainer` and `LimeExplainer`.
+
+Both need tabular columns and a background: `background_rows`, or one `background` dict. A single background row is a coarse baseline and is named on `note`. Text fields are skipped. Sampled calls go to `model.predict` and are counted on `cost`; they are not written to the cassette.
+
+KernelSHAP uses the global NumPy RNG. The adapter saves and restores that state around the call. LIME takes `random_state` from the config seed.
+
 ## stability_score_v1
 
 Weights live on `StabilityConfig.score_weights` and must sum to 1. Defaults:

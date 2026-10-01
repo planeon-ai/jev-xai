@@ -49,8 +49,9 @@ class TraceInfo(_Model):
 class DecisionRecord(_Model):
     """One replayable decision.
 
-    ``input`` is null when the pack was written hash-only or the payload was
-    externalized. ``input_hash`` is always present.
+    ``input`` is null when the pack was written hash-only. An oversized payload
+    is ``{"external_hash": ...}``; it is reachable when that object was written
+    to an evidence store. ``input_hash`` is always of the pre-redaction input.
     """
 
     schema_version: str = SCHEMA_VERSION

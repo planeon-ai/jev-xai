@@ -27,7 +27,9 @@ from jev_xai.explainers.ablation import AblationExplainer
 from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.lime import LimeExplainer
 from jev_xai.explainers.permutation import PermutationExplainer
+from jev_xai.explainers.shap import ShapExplainer
 from jev_xai.limitations import LIMITATIONS
 from jev_xai.model.client import ModelClient
 from jev_xai.replay.diff import cross_version_diff
@@ -59,6 +61,7 @@ __all__ = [
     "JevXaiConfig",
     "JevXaiError",
     "JevXaiUsageError",
+    "LimeExplainer",
     "ModelCallError",
     "ModelClient",
     "PermutationExplainer",
@@ -66,6 +69,7 @@ __all__ = [
     "ReplayMismatchError",
     "ReproducibilityProbe",
     "SchemaVersionError",
+    "ShapExplainer",
     "StabilityEvaluator",
     "assert_stable",
     "build_audit_pack",

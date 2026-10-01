@@ -33,7 +33,7 @@ CI runs `python benchmarks/run.py --quick`. Full runs are manual. The qualitativ
 
 ## Explainability libraries
 
-DiCE, Alibi, and CARLA are not core dependencies. Ablation, greedy counterfactual search, anchors, and permutation importance are in-tree so masking policy, the noise floor, async calls, and call budgets stay under one config object. SHAP and LIME stay out of the core install. Third-party engines belong on `jev_xai.explainers` as separate packages.
+DiCE, Alibi, and CARLA are not core dependencies. Ablation, greedy counterfactual search, anchors, and permutation importance are in-tree so masking policy, the noise floor, async calls, and call budgets stay under one config object. SHAP and LIME stay out of the core install. The optional extras `jev-xai[shap]` and `jev-xai[lime]` are thin adapters on the same `ModelClient` budget and `FeatureSpec` context. Third-party engines belong on `jev_xai.explainers` as separate packages.
 
 ## Adapter decision
 

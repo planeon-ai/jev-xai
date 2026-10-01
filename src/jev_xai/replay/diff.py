@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from jev_xai.config.loader import config_hash
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.evidence.schema import DecisionRecord
+from jev_xai.evidence.store import EvidenceStore
 from jev_xai.model.fingerprint import model_fingerprint
 from jev_xai.replay.replay import ReplayEngine, ReplayResult
 
@@ -22,6 +24,7 @@ def classify_mismatch(
     live_package_hash: str,
     live_config_hash: str,
     matched: bool,
+    resolved_input: Mapping[str, Any] | None = None,
 ) -> str | None:
     """Name the most likely reason a live replay disagrees with the record."""
 
@@ -34,9 +37,8 @@ def classify_mismatch(
     recorded = record.explainer_config.get("config_hash")
     if isinstance(recorded, str) and recorded != live_config_hash:
         return "config_changed"
-    if isinstance(record.input, dict) and any(
-        str(key).lower() in NONSTATIONARY_KEYS for key in record.input
-    ):
+    payload = record.input if resolved_input is None else resolved_input
+    if isinstance(payload, dict) and any(str(key).lower() in NONSTATIONARY_KEYS for key in payload):
         return "input_nonstationary"
     return "model_nondeterministic"
 
@@ -65,10 +67,12 @@ async def cross_version_diff(
     records: list[DecisionRecord],
     model: Any,
     config: JevXaiConfig,
+    *,
+    store: EvidenceStore | None = None,
 ) -> DiffReport:
     """Re-run stored records against ``model`` and report decision flips."""
 
-    engine = ReplayEngine(config)
+    engine = ReplayEngine(config, store=store)
     live_hash = config_hash(config)
     rows: list[DiffRow] = []
     warnings: list[str] = []
@@ -88,7 +92,7 @@ async def cross_version_diff(
                 )
             )
             continue
-        result: ReplayResult = await engine.replay(record, model=model, mode="current")
+        result: ReplayResult = await engine.replay(record, model=model, mode="cross")
         rows.append(
             DiffRow(
                 decision_id=record.decision_id,

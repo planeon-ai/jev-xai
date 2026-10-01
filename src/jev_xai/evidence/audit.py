@@ -7,6 +7,7 @@ from typing import Any
 
 from jev_xai.config.loader import config_hash
 from jev_xai.config.schema import JevXaiConfig
+from jev_xai.errors import ReplayMismatchError
 from jev_xai.evidence.html import render_html
 from jev_xai.evidence.report import render_markdown
 from jev_xai.evidence.schema import DecisionRecord
@@ -28,11 +29,19 @@ async def build_audit_pack(
     directory: Path,
     *,
     context: ExplainContext | None = None,
+    store: EvidenceStore | None = None,
 ) -> Path:
     """Write the V1 audit pack, including a verifiable manifest."""
 
-    if not isinstance(record.input, dict):
+    if record.input_externalized:
+        try:
+            instance = ReplayEngine(config, store=store)._resolve_input(record)
+        except ReplayMismatchError as exc:
+            raise ValueError(str(exc)) from exc
+    elif not isinstance(record.input, dict):
         raise ValueError("audit requires a reachable dict input on the decision record")
+    else:
+        instance = record.input
     cassette = Cassette(directory / "cassette")
     client = ModelClient(
         model,
@@ -43,20 +52,19 @@ async def build_audit_pack(
     )
     if record.reproducibility is not None:
         client.noise_floor = record.reproducibility.noise_floor
-    ablation = await AblationExplainer(config).explain(client, record.input, context)
-    counterfactual = await CounterfactualExplainer(config).explain(client, record.input, context)
+    ablation = await AblationExplainer(config).explain(client, instance, context)
+    counterfactual = await CounterfactualExplainer(config).explain(client, instance, context)
     stability = await StabilityEvaluator(config).evaluate(
         AblationExplainer(config),
         model,
-        record.input,
+        instance,
         runs=min(config.stability.runs, 3),
         context=context,
         client=client,
     )
-    replay = await ReplayEngine(config, cassette=cassette).replay(record, model=model, mode="exact")
-    behavioral = await ReplayEngine(config, cassette=cassette).replay(
-        record, model=model, mode="current"
-    )
+    replay_engine = ReplayEngine(config, cassette=cassette, store=store)
+    replay = await replay_engine.replay(record, model=model, mode="exact")
+    behavioral = await replay_engine.replay(record, model=model, mode="current")
     pack = {
         "decision": record.model_dump(mode="json"),
         "ablation": ablation.model_dump(mode="json"),

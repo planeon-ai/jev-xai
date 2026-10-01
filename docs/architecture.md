@@ -9,6 +9,8 @@ JevXaiConfig
         -> CounterfactualExplainer
         -> AnchorExplainer
         -> PermutationExplainer
+        -> ShapExplainer (optional extra)
+        -> LimeExplainer (optional extra)
             -> StabilityEvaluator
 DecisionRecorder -> EvidenceStore -> audit pack
 ReplayEngine: evidence replay | behavioral reproduction | cross-version diff
