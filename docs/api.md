@@ -18,7 +18,7 @@ A model call may return a label string, a `(label, probability)` pair, or a dict
 
 Later sources win: defaults, named profile (`quick`, `audit`, `ci-gate`), project TOML `path`, `JEV_XAI_*` environment (`__` nests keys), `cli` dict, then `overrides`.
 
-**Returns** `JevXaiConfig`: `seed`, `threshold`, `policy_version`, and nested `model`, `ablation`, `counterfactual`, `anchors`, `permutation`, `stability`, `reproducibility`, `replay`, `evidence`.
+**Returns** `JevXaiConfig`: `seed`, `threshold`, `policy_version`, and nested `model`, `ablation`, `counterfactual`, `anchors`, `permutation`, `shap`, `lime`, `stability`, `reproducibility`, `replay`, `evidence`.
 
 ### `config_hash(config: JevXaiConfig) -> str`
 
@@ -69,7 +69,7 @@ Wraps a caller-supplied JEV-like client. The client must be callable or expose `
 
 ## Record
 
-### `DecisionRecorder(model, config=None, *, cassette=None)`
+### `DecisionRecorder(model, config=None, *, cassette=None, store=None)`
 
 | Method | Input | Output |
 | --- | --- | --- |
@@ -77,28 +77,29 @@ Wraps a caller-supplied JEV-like client. The client must be callable or expose `
 | `run_sync` | same arguments | `DecisionRecord`. Raises `JevXaiUsageError` inside a running event loop |
 | `wrap` | none | `async middleware(instance, **trace) -> DecisionRecord` |
 
-`run` calls the model once, writes the cassette entry, and when `repeat_probe_runs > 0` measures reproducibility before returning.
+`run` calls the model once, writes the cassette entry, and when `repeat_probe_runs > 0` measures reproducibility before returning. An input larger than `max_inline_input_bytes` is stored as `{"external_hash": ...}`. Pass `store` to write that object; the record is then `input_reachable`. Without a store the hash is kept and the input is not reachable.
 
 **`DecisionRecord` fields:** `schema_version`, `decision_id`, `timestamp`, `model` (`provider`, `model_name`, `model_version`, `artifact_hash`, `fingerprint`), `input`, `input_hash`, `input_reachable`, `input_externalized`, `output` (`label`, `probability`, `probabilities`), `threshold`, `policy_version`, `runtime`, `explainer_config` (includes `config_hash`), `explanations`, `cost` (`n_model_calls`, `cache_hits`, `wall_ms`), `trace` (`trace_id`, `span_id`, `agent_id`, `step_index`, `parent_decision_id`), `cassette_key`, `reproducibility` (`ProbeSummary` or null).
 
 ## Replay
 
-### `ReplayEngine(config, *, cassette=None).replay(record, *, model=None, mode=None) -> ReplayResult`
+### `ReplayEngine(config, *, cassette=None, store=None).replay(record, *, model=None, mode=None) -> ReplayResult`
 
-`mode` defaults to `config.replay.mode`.
+`mode` defaults to `config.replay.mode`. `store` loads an externalized input before a live call.
 
 | `mode` | Requires | Claim on the result |
 | --- | --- | --- |
 | `exact` | cassette or the stored output | `evidence_replay`. Zero live model calls |
-| `current` | live `model` and a reachable dict input | `behavioral_reproduction` |
+| `current` | live `model` and a reachable input | `behavioral_reproduction` |
+| `cross` | live `model` and a reachable input | `behavioral_reproduction` on the supplied model. A directory of records is still `cross_version_diff` |
 
-`cross` is a corpus operation: use `cross_version_diff`. `counterfactual` confirmation is `replay_confirmed` on each candidate, not a replay mode.
+`counterfactual` raises `JevXaiUsageError`. Confirmation is `replay_confirmed` on a counterfactual candidate.
 
 **`ReplayResult` fields:** `claim`, `mode`, `matched`, `mismatch_reason`, `original_label`, `replay_label`, `original_probability`, `replay_probability`, `cost`, `config_hash_matches`, `note`.
 
 `mismatch_reason` is one of `model_version_changed`, `environment_changed`, `config_changed`, `input_nonstationary`, `model_nondeterministic`, or null when the replay matched.
 
-### `cross_version_diff(records, model, config) -> DiffReport`
+### `cross_version_diff(records, model, config, *, store=None) -> DiffReport`
 
 Re-invokes `model` on every reachable record.
 
@@ -110,7 +111,7 @@ Shared input for every explainer: a `ModelClient`, the decision `instance: Mappi
 
 **`FeatureSpec`:** `name`, `kind` (`numeric`, `categorical`, `boolean`, `text`), `mutable`, `allowed_values`, `allowed_range`, `baseline`.
 
-**`ExplainContext`:** `features`, `groups` (name to feature names), `target_label` (desired counterfactual label), `background`, `text_field`. `feature(name) -> FeatureSpec | None`.
+**`ExplainContext`:** `features`, `groups` (name to feature names), `target_label` (desired counterfactual label), `background` (one baseline row), `background_rows` (attribution background), `text_field`. `feature(name) -> FeatureSpec | None`.
 
 ### `AblationExplainer(config).explain(client, instance, context=None) -> AblationResult`
 
@@ -141,6 +142,18 @@ Precision counts model calls. Coverage does not: it is the fraction of unconditi
 **Returns** `label`, `scope` (`local` or `dataset`), `rows`.
 
 **`PermutationRow`:** `feature`, `importance` (mean drop in P(original label); `null` when the model returns no probability), `label_flip_rate`, `n_samples`. Immutable features are omitted. A feature with no alternative value has importance `0` when a probability exists.
+
+### `ShapExplainer(config, *, seed=None).explain(client, instance, context=None) -> ShapResult`
+
+Optional. Requires `pip install jev-xai[shap]`, probabilities, a `FeatureSpec`, and `background_rows` (or a single `background`). Text columns and categoricals without `allowed_values` are listed on `skipped`. KernelSHAP draws from the global NumPy RNG; that state is saved and restored. Sample calls use `model.predict` and are not written to the cassette.
+
+**Returns** `label`, `rows` (`feature`, `value`), `base_value`, `skipped`, `note`, `algorithm` (`kernel_shap`).
+
+### `LimeExplainer(config, *, seed=None).explain(client, instance, context=None) -> LimeResult`
+
+Optional. Requires `pip install jev-xai[lime]` and the same context as SHAP. The surrogate regresses P(original label).
+
+**Returns** `label`, `rows` (`feature`, `weight`), `skipped`, `note`, `algorithm` (`lime_tabular`).
 
 ### `ReproducibilityProbe(config).measure(client, instance, *, reference_label) -> ProbeSummary`
 
@@ -199,9 +212,9 @@ Install `jev-xai[cli]`. The console script is `jev-xai`. Global options on the c
 | --- | --- | --- |
 | `doctor` | `--model module:callable`, optional `--source` JSONL, `--format` | `Diagnosis` as json, md, html, or table |
 | `import` | JSONL path, `--out` directory | one `DecisionRecord` JSON per decision, plus the tier name |
-| `record` | `--model`, `--input` JSON object, `--out`, optional `--cassette` | path of the written `DecisionRecord` |
-| `explain` | `--model`, `--input`, `--explainer` `ablation`, `counterfactual`, `anchors`, or `permutation`, optional `--context` ExplainContext JSON | the matching result object |
-| `replay` | `decision.json`, `--mode` `exact` or `current`, optional `--model` and `--cassette` | `ReplayResult` |
+| `record` | `--model`, `--input` JSON object, `--out`, optional `--cassette` and `--store` | path of the written `DecisionRecord` |
+| `explain` | `--model`, `--input`, `--explainer` `ablation`, `counterfactual`, `anchors`, `permutation`, `shap`, or `lime`, optional `--context` ExplainContext JSON | the matching result object |
+| `replay` | `decision.json`, `--mode` `exact`, `current`, or `cross`, optional `--model`, `--cassette`, and `--store` | `ReplayResult` |
 | `diff` | `--records` directory of JSON, `--model` | `DiffReport` |
 | `audit` | `decision.json`, `--model`, `--out` | pack directory. Prints `verified` and `config_hash` |
 | `gate` | `--records`, `--min-stability`, `--min-reproduction-rate` | exit 0, or exit 1 with the failing files |
@@ -239,6 +252,10 @@ Install `jev-xai[cli]`. The console script is `jev-xai`. Global options on the c
 ::: jev_xai.explainers.anchors.AnchorExplainer
 
 ::: jev_xai.explainers.permutation.PermutationExplainer
+
+::: jev_xai.explainers.shap.ShapExplainer
+
+::: jev_xai.explainers.lime.LimeExplainer
 
 ::: jev_xai.replay.repeatability.ReproducibilityProbe
 

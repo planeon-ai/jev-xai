@@ -32,6 +32,8 @@ dependencies = [
 [project.optional-dependencies]
 cli = ["typer>=0.12", "rich>=13"]
 stats = ["scipy>=1.11"]
+shap = ["shap>=0.44"]
+lime = ["lime>=0.2.0.1"]
 dev = [
   "pytest>=8",
   "pytest-cov>=5",
@@ -49,7 +51,9 @@ jev-xai = "jev_xai.cli.main:main"
 ablation = "jev_xai.explainers.ablation:AblationExplainer"
 anchors = "jev_xai.explainers.anchors:AnchorExplainer"
 counterfactual = "jev_xai.explainers.counterfactual:CounterfactualExplainer"
+lime = "jev_xai.explainers.lime:LimeExplainer"
 permutation = "jev_xai.explainers.permutation:PermutationExplainer"
+shap = "jev_xai.explainers.shap:ShapExplainer"
 
 [project.entry-points."jev_xai.adapters"]
 callable = "jev_xai.adapters.callable:CallableAdapter"

@@ -62,6 +62,8 @@ The contract is [docs/api.md](https://github.com/planeon-ai/jev-xai/blob/main/do
 | `CounterfactualExplainer.explain` | same, plus allowed ranges | `CounterfactualResult` |
 | `AnchorExplainer.explain` | same | `AnchorResult` (precision, coverage) |
 | `PermutationExplainer.explain` | same | `PermutationResult` (importance, flip rate) |
+| `ShapExplainer.explain` | same, plus background rows; extra `jev-xai[shap]` | `ShapResult` |
+| `LimeExplainer.explain` | same; extra `jev-xai[lime]` | `LimeResult` |
 | `ReproducibilityProbe.measure` | client, input, reference label | `ProbeSummary` |
 | `StabilityEvaluator.evaluate` | explainer, model, input | `StabilityResult` |
 | `build_audit_pack` | record, model, config, directory | Merkle pack directory |

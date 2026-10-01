@@ -267,7 +267,7 @@ def test_explain_anchors_permutation_and_unknown(tmp_path: Path) -> None:
             "--input",
             str(case),
             "--explainer",
-            "shap",
+            "not-an-explainer",
             "--format",
             "json",
         ],

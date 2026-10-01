@@ -7,7 +7,9 @@ The library cannot explain an input it cannot see, and it cannot perturb a model
 | Model re-invocation | ablation, counterfactuals, anchors, permutation, and stability stay off |
 | Reachable input (not only a hash) | only evidence replay of the stored record |
 | `FeatureSpec` | ablation is one whole-input mask; anchors and permutation stay off |
-| Calibrated probabilities | delta-P is omitted; label flips remain |
+| Calibrated probabilities | delta-P is omitted; label flips remain. SHAP and LIME stay off |
+| Background rows | SHAP and LIME stay off. Ablation can still mask fields |
+| `jev-xai[shap]` or `jev-xai[lime]` | that attribution explainer stays off |
 | Model fingerprint and a record corpus | cross-version replay stays off |
 
 `hash_only` redaction and reachable inputs pull against each other. A team that stores only hashes is capped at tier 0. That is reported by `jev-xai doctor`, not discovered mid-loop. Engines raise `CapabilityError` with the missing prerequisite and how to supply it.

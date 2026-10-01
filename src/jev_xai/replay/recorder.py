@@ -19,6 +19,7 @@ from jev_xai.evidence.schema import (
     OutputInfo,
     TraceInfo,
 )
+from jev_xai.evidence.store import EvidenceStore
 from jev_xai.model.cassette import Cassette
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
@@ -35,11 +36,13 @@ class DecisionRecorder:
         config: JevXaiConfig | None = None,
         *,
         cassette: Cassette | None = None,
+        store: EvidenceStore | None = None,
     ) -> None:
         self.model = model
         self.config = config or JevXaiConfig()
         self.fingerprint = model_fingerprint(model)
         self.cassette = cassette
+        self.store = store
         self.client = ModelClient(
             model,
             self.config.model,
@@ -66,7 +69,9 @@ class DecisionRecorder:
                 self.client, payload, reference_label=prediction.label
             )
         meta = self.model.metadata() if callable(getattr(self.model, "metadata", None)) else {}
-        stored_input, reachable, externalized = prepare_input(payload, self.config.evidence)
+        stored_input, reachable, externalized = prepare_input(
+            payload, self.config.evidence, store=self.store
+        )
         return DecisionRecord(
             schema_version=SCHEMA_VERSION,
             decision_id=decision_id or str(uuid.uuid4()),

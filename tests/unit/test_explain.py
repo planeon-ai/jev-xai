@@ -11,7 +11,13 @@ from tests.fakes import FlippedModel, NoPredictModel, ScriptedNoise, ThresholdMo
 
 from jev_xai.config.loader import config_hash, load_config
 from jev_xai.config.schema import JevXaiConfig
-from jev_xai.errors import CapabilityError, JevXaiError, ReplayMismatchError, SchemaVersionError
+from jev_xai.errors import (
+    CapabilityError,
+    JevXaiError,
+    JevXaiUsageError,
+    ReplayMismatchError,
+    SchemaVersionError,
+)
 from jev_xai.evidence.audit import build_audit_pack
 from jev_xai.evidence.redaction import prepare_input
 from jev_xai.evidence.schema import (
@@ -250,6 +256,33 @@ def test_record_evidence_replay_and_behavioral_reproduction(tmp_path: Path) -> N
     assert live.claim == "behavioral_reproduction"
     assert live.matched
     raise_on_mismatch(live)
+
+
+def test_cross_replay_and_externalized_input(tmp_path: Path) -> None:
+    config = _cfg(evidence={"max_inline_input_bytes": 16})
+    model = ThresholdModel()
+    bare = run(DecisionRecorder(model, config).run, _safe_input(), decision_id="inline-hash")
+    assert bare.input_externalized is True
+    assert bare.input_reachable is False
+    store = EvidenceStore(tmp_path / "store")
+    record = run(
+        DecisionRecorder(model, config, store=store).run,
+        _safe_input(),
+        decision_id="stored",
+    )
+    assert record.input_externalized is True
+    assert record.input_reachable is True
+    assert isinstance(record.input, dict)
+    digest = str(record.input["external_hash"])
+    assert store.get_object(digest)["verified_user"] is True
+    live = run(ReplayEngine(config, store=store).replay, record, model=model, mode="cross")
+    assert live.mode == "cross"
+    assert live.claim == "behavioral_reproduction"
+    assert live.matched
+    with pytest.raises(ReplayMismatchError):
+        run(ReplayEngine(config).replay, record, model=model, mode="current")
+    with pytest.raises(JevXaiUsageError):
+        run(ReplayEngine(config).replay, record, model=model, mode="counterfactual")
 
 
 def test_mismatch_classifies_model_version_change(tmp_path: Path) -> None:

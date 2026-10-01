@@ -21,7 +21,9 @@ from jev_xai.explainers.anchors import AnchorResult
 from jev_xai.explainers.base import Explainer, ExplanationResult
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualResult
+from jev_xai.explainers.lime import LimeResult, LimeRow
 from jev_xai.explainers.permutation import PermutationResult, PermutationRow
+from jev_xai.explainers.shap import ShapResult, ShapRow
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
 from jev_xai.replay.seeding import spawn_seeds
@@ -191,6 +193,16 @@ def _vectors(
             rankings.append([row.feature for row in ranked])
             attributions.append({row.feature: row.importance or 0.0 for row in result.rows})
             change_sets.append(frozenset())
+        elif isinstance(result, ShapResult):
+            ranked_shap = _sort_shap(result.rows)
+            rankings.append([row.feature for row in ranked_shap])
+            attributions.append({row.feature: row.value for row in result.rows})
+            change_sets.append(frozenset())
+        elif isinstance(result, LimeResult):
+            ranked_lime = _sort_lime(result.rows)
+            rankings.append([row.feature for row in ranked_lime])
+            attributions.append({row.feature: row.weight for row in result.rows})
+            change_sets.append(frozenset())
         else:
             rankings.append([])
             attributions.append({})
@@ -252,6 +264,14 @@ def _score(results: list[ExplanationResult], config: JevXaiConfig) -> dict[str, 
 
 def _sort_permutations(rows: list[PermutationRow]) -> list[PermutationRow]:
     return sorted(rows, key=_permutation_rank, reverse=True)
+
+
+def _sort_shap(rows: list[ShapRow]) -> list[ShapRow]:
+    return sorted(rows, key=lambda row: abs(row.value), reverse=True)
+
+
+def _sort_lime(rows: list[LimeRow]) -> list[LimeRow]:
+    return sorted(rows, key=lambda row: abs(row.weight), reverse=True)
 
 
 def _permutation_rank(row: PermutationRow) -> float:
