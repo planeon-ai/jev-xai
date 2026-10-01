@@ -13,6 +13,8 @@ Without a `FeatureSpec`, ablation masks the whole input once.
 
 Rows with `|delta|` below the probe noise floor are flagged `below_noise_floor` and rendered grey in the HTML report. `on_below_noise_floor` is `flag`, `drop`, or `error`.
 
+A mask that leaves the input unchanged is `noop`. `delta_p` is null and the model is not called. That row is not evidence the feature has no effect: the mask value was already the instance value. A boolean that is already false, under the default neutral mask, is the usual case. No-op rows are left out of the stability ranking and out of `ablation_top`.
+
 ## Counterfactuals
 
 Algorithm: greedy coordinate descent over a per-feature quantile grid, then a sparsity polish that drops any change the decision does not need. Budgets: `max_calls` / `call_budget` and `max_features_changed`.
@@ -56,4 +58,4 @@ Decision reproducibility is **not** inside this score. It is `reproduction_rate`
 
 Failed runs are counted. If `n_failed / runs` exceeds `failure_tolerance`, evaluation raises.
 
-`assert_stable(result, min_score=0.8)` and `jev-xai gate` turn the score into a CI check. To load the assertion helper as a pytest plugin, set `pytest_plugins = ["jev_xai.pytest_plugin"]` in your project. It is not auto-loaded, so it does not import jev-xai before coverage starts.
+`assert_stable(result, min_score=0.8)` and `jev-xai gate` turn the score into a CI check. The gate walks nested records and audit packs. It fails when stability or reproduction rate is below the threshold, when evidence or behavioral replay `matched` is false, or when the directory has none of those fields. Copies under `store/` are not scored again. To load the assertion helper as a pytest plugin, set `pytest_plugins = ["jev_xai.pytest_plugin"]` in your project. It is not auto-loaded, so it does not import jev-xai before coverage starts.

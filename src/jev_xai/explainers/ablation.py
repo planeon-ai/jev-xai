@@ -28,6 +28,7 @@ class AblationRow(ExplanationResult):
     delta_p: float | None = None
     label_flipped: bool = False
     below_noise_floor: bool = False
+    noop: bool = False
     original_label: str = ""
     ablated_label: str = ""
 
@@ -178,7 +179,20 @@ class AblationExplainer(Explainer):
         original_label: str,
         baseline: float | None,
     ) -> AblationRow:
-        del original
+        if _same_input(original, masked):
+            return AblationRow(
+                feature=feature,
+                scope=scope,
+                masking_strategy=strategy,
+                baseline_probability=baseline,
+                delta_p=None,
+                label_flipped=False,
+                below_noise_floor=False,
+                noop=True,
+                original_label=original_label,
+                ablated_label=original_label,
+                noise_floor=client.noise_floor,
+            )
         prediction = await client.predict(masked)
         ablated = prediction.class_probability(original_label)
         delta = None if baseline is None or ablated is None else baseline - ablated
@@ -196,6 +210,12 @@ class AblationExplainer(Explainer):
             ablated_label=prediction.label,
             noise_floor=client.noise_floor,
         )
+
+
+def _same_input(original: Mapping[str, Any], masked: Mapping[str, Any]) -> bool:
+    """True when the mask left every field as it was, so a call would not be evidence."""
+
+    return dict(original) == dict(masked)
 
 
 def _below_floor(delta: float | None, floor: float | None) -> bool:

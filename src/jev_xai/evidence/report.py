@@ -41,8 +41,9 @@ def render_markdown(pack: dict[str, Any]) -> str:
         ]
     )
     for row in pack.get("ablation", {}).get("rows", []):
+        delta = "noop" if row.get("noop") else row.get("delta_p")
         lines.append(
-            f"| {row.get('feature')} | {row.get('delta_p')} | {row.get('label_flipped')} | {row.get('below_noise_floor')} |"
+            f"| {row.get('feature')} | {delta} | {row.get('label_flipped')} | {row.get('below_noise_floor')} |"
         )
     lines.extend(["", "## Counterfactuals", ""])
     for candidate in pack.get("counterfactuals", {}).get("candidates", []):

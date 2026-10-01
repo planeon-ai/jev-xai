@@ -167,13 +167,14 @@ def _vectors(
     change_sets: list[frozenset[str]] = []
     for result in results:
         if isinstance(result, AblationResult):
+            measured = [row for row in result.rows if not row.noop]
             ordered = sorted(
-                result.rows,
+                measured,
                 key=lambda row: abs(row.delta_p) if row.delta_p is not None else -1.0,
                 reverse=True,
             )
             rankings.append([row.feature for row in ordered])
-            attributions.append({row.feature: row.delta_p or 0.0 for row in result.rows})
+            attributions.append({row.feature: row.delta_p or 0.0 for row in measured})
             change_sets.append(frozenset())
         elif isinstance(result, CounterfactualResult):
             if result.candidates:

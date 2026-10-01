@@ -117,7 +117,7 @@ Shared input for every explainer: a `ModelClient`, the decision `instance: Mappi
 
 **Returns** `rows` and `suppressed_rows` of `AblationRow`, plus `masking_policy`.
 
-**`AblationRow`:** `feature`, `scope` (`single`, `group`, `text_span`, `whole_input`), `masking_strategy`, `baseline_probability`, `ablated_probability`, `delta_p` (P(original label) minus P(ablated)), `label_flipped`, `below_noise_floor`, `original_label`, `ablated_label`.
+**`AblationRow`:** `feature`, `scope` (`single`, `group`, `text_span`, `whole_input`), `masking_strategy`, `baseline_probability`, `ablated_probability`, `delta_p` (P(original label) minus P(ablated)), `label_flipped`, `below_noise_floor`, `noop` (true when the mask did not change the input; `delta_p` is then null), `original_label`, `ablated_label`.
 
 ### `CounterfactualExplainer(config, *, seed=None).explain(client, instance, context=None) -> CounterfactualResult`
 
@@ -217,7 +217,7 @@ Install `jev-xai[cli]`. The console script is `jev-xai`. Global options on the c
 | `replay` | `decision.json`, `--mode` `exact`, `current`, or `cross`, optional `--model`, `--cassette`, and `--store` | `ReplayResult` |
 | `diff` | `--records` directory of JSON, `--model` | `DiffReport` |
 | `audit` | `decision.json`, `--model`, `--out` | pack directory. Prints `verified` and `config_hash` |
-| `gate` | `--records`, `--min-stability`, `--min-reproduction-rate` | exit 0, or exit 1 with the failing files |
+| `gate` | `--records` directory, `--min-stability`, `--min-reproduction-rate` | exit 0, or exit 1. Checks nested JSON for stability, reproduction rate, and replay `matched`. Fails when none of those fields are present. Skips `store/` copies. |
 | `bench` | `--out`, `--quick` | JSON metrics path |
 | `plugins list` | `--format` | entry points in `jev_xai.explainers`, `jev_xai.adapters`, `jev_xai.sources` |
 
