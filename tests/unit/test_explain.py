@@ -292,6 +292,48 @@ def test_stability_parallel_matches_sequential_and_formula() -> None:
     assert helper.stability_score == pytest.approx(parallel.stability_score)
 
 
+def test_stability_measures_the_model_not_the_warm_cache() -> None:
+    class Counting(ThresholdModel):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def predict(self, instance: dict[str, object]) -> dict[str, object]:
+            self.calls += 1
+            return super().predict(instance)
+
+    config = _cfg(stability={"runs": 2, "failure_tolerance": 0})
+    model = Counting()
+    client = _client(model, config)
+    instance = _safe_input()
+    run(AblationExplainer(config).explain, client, instance, FEATURES)
+    warmed = model.calls
+    assert warmed > 0
+    run(
+        StabilityEvaluator(config).evaluate,
+        AblationExplainer(config),
+        model,
+        instance,
+        runs=1,
+        context=FEATURES,
+        client=client,
+    )
+    first_run = model.calls - warmed
+    assert first_run > 0
+    run(
+        StabilityEvaluator(config).evaluate,
+        AblationExplainer(config),
+        model,
+        instance,
+        runs=1,
+        context=FEATURES,
+        client=client,
+    )
+    assert model.calls - warmed - first_run == first_run
+    cached = model.calls
+    run(client.predict, instance)
+    assert model.calls == cached
+
+
 def test_stability_partial_failure() -> None:
     config = _cfg(stability={"runs": 4, "failure_tolerance": 0.0})
 

@@ -73,9 +73,10 @@ class StabilityEvaluator:
             except Exception as exc:
                 failures.append(f"run {index}: {exc}")
 
-        async with anyio.create_task_group() as group:
-            for index, seed in enumerate(seeds):
-                group.start_soon(one, index, seed)
+        with shared.ignore_cache():
+            async with anyio.create_task_group() as group:
+                for index, seed in enumerate(seeds):
+                    group.start_soon(one, index, seed)
 
         failed = len(failures)
         if total and failed / total > self.config.stability.failure_tolerance:
@@ -117,13 +118,14 @@ class StabilityEvaluator:
         shared = client or _client(model, self.config)
         collected: list[ExplanationResult] = []
         failures: list[str] = []
-        for index, seed in enumerate(seeds):
-            try:
-                collected.append(
-                    await _with_seed(explainer, seed).explain(shared, dict(instance), context)
-                )
-            except Exception as exc:
-                failures.append(f"run {index}: {exc}")
+        with shared.ignore_cache():
+            for index, seed in enumerate(seeds):
+                try:
+                    collected.append(
+                        await _with_seed(explainer, seed).explain(shared, dict(instance), context)
+                    )
+                except Exception as exc:
+                    failures.append(f"run {index}: {exc}")
         if total and len(failures) / total > self.config.stability.failure_tolerance:
             raise JevXaiError("stability failure tolerance exceeded")
         score = _score(collected, self.config)

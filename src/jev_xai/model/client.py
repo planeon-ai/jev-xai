@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from typing import Any
 
 import anyio
@@ -44,8 +45,23 @@ class ModelClient:
         self._calls = 0
         self._hits = 0
         self._wall_ms = 0.0
+        self._ignore_cache = 0
         self._lock: anyio.Lock | None = None
         self._rng = generator(seed)
+
+    @contextmanager
+    def ignore_cache(self) -> Iterator[None]:
+        """Call the model instead of the cache, and do not write those calls back.
+
+        Stability measurement uses this so a warm cache cannot look like a
+        repeated experiment. The cassette is left as it was.
+        """
+
+        self._ignore_cache += 1
+        try:
+            yield
+        finally:
+            self._ignore_cache -= 1
 
     def cache_key(self, instance: Mapping[str, Any]) -> str:
         return content_hash({"fingerprint": self.fingerprint, "input": dict(instance)})
@@ -64,7 +80,7 @@ class ModelClient:
 
     def _lookup(self, key: str) -> Prediction | None:
         mode = self.config.cache_mode
-        if mode == "off":
+        if self._ignore_cache or mode == "off":
             return None
         if mode == "memory":
             return self.memory.get(key)
@@ -77,7 +93,7 @@ class ModelClient:
 
     def _store(self, key: str, prediction: Prediction) -> None:
         mode = self.config.cache_mode
-        if mode == "off":
+        if self._ignore_cache or mode == "off":
             return
         self.memory.put(key, prediction)
         if mode == "cassette" and self.cassette is not None:
@@ -116,7 +132,7 @@ class ModelClient:
         missing: list[int] = []
         for index, row in enumerate(rows):
             key = self.cache_key(row)
-            cached = self._lookup(key) if self.config.cache_mode != "off" else None
+            cached = self._lookup(key)
             if cached is not None:
                 self._hits += 1
                 results[index] = cached
