@@ -8,6 +8,7 @@
 - Replay mode `cross` re-invokes one record on the supplied model. `counterfactual` is rejected. Oversized inputs written to an evidence store can be loaded back for replay, diff, and audit.
 - Ablation marks a mask that does not change the input as `noop` and does not call the model for it. `jev-xai gate` walks nested packs, fails on an unmatched replay, and fails closed when a directory has no stability, reproduction, or replay evidence.
 - Audit packs include anchors and permutation when a `FeatureSpec` is supplied. Without one, or when the call budget is exhausted, those members record why they were skipped. Reports show `replay_confirmed` on counterfactual candidates.
+- `replay_confirmed` is an uncached second call of the finished counterfactual. `success_rate` counts only that confirmation. `jev-xai gate` fails when a candidate flipped and the confirmation did not.
 
 ## 0.1.0a0
 

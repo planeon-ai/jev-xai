@@ -183,7 +183,84 @@ def test_counterfactual_respects_immutable_features_and_can_flip() -> None:
     client = _client(ThresholdModel(), free)
     found = anyio.run(CounterfactualExplainer(free).explain, client, unsafe, FEATURES)
     assert any(candidate.flipped and candidate.replay_confirmed for candidate in found.candidates)
+    assert found.success_rate > 0
     assert found.cost.n_model_calls <= free.counterfactual.call_budget
+
+
+def test_second_call_can_refuse_a_flip() -> None:
+    class Reverts:
+        def __init__(self) -> None:
+            self.seen: dict[str, int] = {}
+
+        def predict(self, instance: dict[str, object]) -> dict[str, object]:
+            key = json.dumps(instance, sort_keys=True, default=str)
+            count = self.seen.get(key, 0) + 1
+            self.seen[key] = count
+            verified = bool(instance.get("verified_user"))
+            sanctions = bool(instance.get("sanctions_match"))
+            probability = 0.2 if count >= 2 or not verified or sanctions else 0.9
+            label = "SAFE" if probability >= 0.5 else "UNSAFE"
+            return {
+                "label": label,
+                "probability": probability,
+                "probabilities": {"SAFE": probability, "UNSAFE": 1 - probability},
+            }
+
+        def metadata(self) -> dict[str, str]:
+            return {
+                "provider": "toy",
+                "model_name": "reverts",
+                "model_version": "1",
+                "fingerprint": "reverts-v1",
+            }
+
+    config = _cfg()
+    found = anyio.run(
+        CounterfactualExplainer(config).explain,
+        _client(Reverts(), config),
+        {
+            "verified_user": False,
+            "sanctions_match": True,
+            "transaction_amount": 40000,
+            "note": "",
+        },
+        FEATURES,
+    )
+    assert any(
+        candidate.flipped and not candidate.replay_confirmed for candidate in found.candidates
+    )
+    assert found.success_rate == 0
+
+
+def test_confirmation_is_not_claimed_when_the_model_budget_is_spent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = ModelClient.predict
+
+    async def wrapped(
+        self: ModelClient, instance: dict[str, object], *, use_cache: bool = True
+    ) -> object:
+        if not use_cache:
+            raise BudgetExceededError("model call budget exhausted")
+        return await original(self, instance, use_cache=use_cache)
+
+    monkeypatch.setattr(ModelClient, "predict", wrapped)
+    config = _cfg()
+    found = anyio.run(
+        CounterfactualExplainer(config).explain,
+        _client(ThresholdModel(), config),
+        {
+            "verified_user": False,
+            "sanctions_match": True,
+            "transaction_amount": 40000,
+            "note": "",
+        },
+        FEATURES,
+    )
+    assert any(
+        candidate.flipped and not candidate.replay_confirmed for candidate in found.candidates
+    )
+    assert found.success_rate == 0
 
 
 def test_stability_parallel_matches_sequential_and_formula() -> None:
