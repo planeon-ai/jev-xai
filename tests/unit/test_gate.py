@@ -75,3 +75,24 @@ def test_noop_ablation_is_labeled_in_the_report() -> None:
     }
     assert "| verified_account | noop |" in render_markdown(pack)
     assert ">noop<" in render_html(pack)
+
+
+def test_numeric_anchor_is_rendered() -> None:
+    pack = {
+        "decision": {"output": {}},
+        "ablation": {"rows": []},
+        "counterfactuals": {"candidates": []},
+        "anchors": {
+            "predicates": [{"feature": "amount", "op": "within", "low": 1.0, "high": 3.0}],
+            "precision": 0.95,
+            "coverage": 0.2,
+            "sufficient": True,
+        },
+        "permutation": {"rows": []},
+        "stability": {},
+    }
+    text = render_markdown(pack)
+    page = render_html(pack)
+    assert "amount within [1.0, 3.0]" in text
+    assert "amount within [1.0, 3.0]" in page
+    assert "| — | — | — |" in text

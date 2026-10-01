@@ -7,14 +7,17 @@ from typing import Any
 
 from jev_xai.config.loader import config_hash
 from jev_xai.config.schema import JevXaiConfig
-from jev_xai.errors import ReplayMismatchError
+from jev_xai.errors import BudgetExceededError, CapabilityError, ReplayMismatchError
 from jev_xai.evidence.html import render_html
 from jev_xai.evidence.report import render_markdown
 from jev_xai.evidence.schema import DecisionRecord
 from jev_xai.evidence.store import EvidenceStore
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
+from jev_xai.explainers.base import Explainer
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.permutation import PermutationExplainer
 from jev_xai.model.cassette import Cassette
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
@@ -31,7 +34,11 @@ async def build_audit_pack(
     context: ExplainContext | None = None,
     store: EvidenceStore | None = None,
 ) -> Path:
-    """Write the V1 audit pack, including a verifiable manifest."""
+    """Write an audit pack, including a verifiable manifest.
+
+    Anchors and permutation are included when ``context`` has a ``FeatureSpec``.
+    Otherwise those members record the missing prerequisite and the pack is still written.
+    """
 
     if record.input_externalized:
         try:
@@ -54,6 +61,8 @@ async def build_audit_pack(
         client.noise_floor = record.reproducibility.noise_floor
     ablation = await AblationExplainer(config).explain(client, instance, context)
     counterfactual = await CounterfactualExplainer(config).explain(client, instance, context)
+    anchors = await _optional(AnchorExplainer(config), client, instance, context)
+    permutation = await _optional(PermutationExplainer(config), client, instance, context)
     stability = await StabilityEvaluator(config).evaluate(
         AblationExplainer(config),
         model,
@@ -69,6 +78,8 @@ async def build_audit_pack(
         "decision": record.model_dump(mode="json"),
         "ablation": ablation.model_dump(mode="json"),
         "counterfactuals": counterfactual.model_dump(mode="json"),
+        "anchors": anchors,
+        "permutation": permutation,
         "stability": stability.model_dump(mode="json"),
         "replay": {
             "evidence": replay.model_dump(mode="json"),
@@ -80,6 +91,8 @@ async def build_audit_pack(
         },
         "explanation": {
             "ablation_top": [row.feature for row in ablation.rows if not row.noop][:5],
+            "anchor_sufficient": None if anchors.get("skipped") else anchors.get("sufficient"),
+            "permutation_top": _permutation_top(permutation),
             "config_hash": config_hash(config),
         },
     }
@@ -89,6 +102,8 @@ async def build_audit_pack(
         "explanation.json": pack["explanation"],
         "counterfactuals.json": pack["counterfactuals"],
         "ablation.json": pack["ablation"],
+        "anchors.json": pack["anchors"],
+        "permutation.json": pack["permutation"],
         "stability.json": pack["stability"],
         "replay.json": pack["replay"],
     }
@@ -105,6 +120,8 @@ async def build_audit_pack(
         "explanation.json",
         "counterfactuals.json",
         "ablation.json",
+        "anchors.json",
+        "permutation.json",
         "stability.json",
         "replay.json",
         "manifest.json",
@@ -116,3 +133,38 @@ async def build_audit_pack(
         if source.resolve() != target.resolve():
             target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     return flat
+
+
+async def _optional(
+    explainer: Explainer,
+    client: ModelClient,
+    instance: dict[str, Any],
+    context: ExplainContext | None,
+) -> dict[str, Any]:
+    """Run an explainer, or record why this pack cannot include it."""
+
+    try:
+        result = await explainer.explain(client, instance, context)
+    except CapabilityError as exc:
+        return {
+            "explainer": explainer.name,
+            "skipped": True,
+            "prerequisite": exc.prerequisite,
+            "fix": exc.fix,
+        }
+    except BudgetExceededError:
+        return {
+            "explainer": explainer.name,
+            "skipped": True,
+            "prerequisite": "call_budget",
+            "fix": "raise model.max_calls or lower the explainer call_budget",
+        }
+    return result.model_dump(mode="json")
+
+
+def _permutation_top(payload: dict[str, Any]) -> list[str]:
+    if payload.get("skipped"):
+        return []
+    rows = list(payload.get("rows") or [])
+    rows.sort(key=lambda row: abs(row.get("importance") or 0.0), reverse=True)
+    return [str(row.get("feature")) for row in rows[:5]]

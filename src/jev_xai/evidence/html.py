@@ -40,8 +40,12 @@ def render_html(pack: dict[str, Any]) -> str:
         changes.append(
             "<li>"
             + (", ".join(parts) or "no change")
-            + f" → <strong>{html.escape(str(candidate.get('label')))}</strong></li>"
+            + f" → <strong>{html.escape(str(candidate.get('label')))}</strong>"
+            + f" · flipped {html.escape(str(candidate.get('flipped')))}"
+            + f" · replay_confirmed {html.escape(str(candidate.get('replay_confirmed')))}</li>"
         )
+    anchors = _anchor_html(pack.get("anchors") or {})
+    permutation = _permutation_html(pack.get("permutation") or {})
     stability = pack.get("stability", {})
     replay = pack.get("replay", {})
     banner = ""
@@ -75,6 +79,8 @@ small {{ color: #57534e; }}
 · probability {html.escape(str(output.get("probability")))}</p>
 <div class="panel"><h2>Ablation</h2>{"".join(bars) or "<p>No ablation rows.</p>"}</div>
 <div class="panel"><h2>Counterfactuals</h2><ul>{"".join(changes) or "<li>None</li>"}</ul></div>
+<div class="panel"><h2>Anchors</h2>{anchors}</div>
+<div class="panel"><h2>Permutation</h2>{permutation}</div>
 <div class="panel"><h2>Stability</h2>
 <p>stability_score_v1 {html.escape(str(stability.get("stability_score")))}</p></div>
 <div class="panel"><h2>Replay</h2>
@@ -84,3 +90,39 @@ small {{ color: #57534e; }}
 </body>
 </html>
 """
+
+
+def _anchor_html(payload: dict[str, Any]) -> str:
+    if payload.get("skipped"):
+        reason = html.escape(str(payload.get("prerequisite")))
+        fix = html.escape(str(payload.get("fix")))
+        return f"<p>Skipped ({reason}): {fix}</p>"
+    predicates = payload.get("predicates") or []
+    parts: list[str] = []
+    for predicate in predicates:
+        feature = html.escape(str(predicate.get("feature")))
+        if predicate.get("op") == "within":
+            parts.append(f"{feature} within [{predicate.get('low')}, {predicate.get('high')}]")
+        else:
+            parts.append(f"{feature} = {html.escape(str(predicate.get('value')))}")
+    rule = " AND ".join(parts) if parts else "no predicate"
+    return (
+        f"<p>{html.escape(rule)}</p>"
+        f"<p>Precision {html.escape(str(payload.get('precision')))} · "
+        f"coverage {html.escape(str(payload.get('coverage')))} · "
+        f"sufficient {html.escape(str(payload.get('sufficient')))}</p>"
+    )
+
+
+def _permutation_html(payload: dict[str, Any]) -> str:
+    if payload.get("skipped"):
+        reason = html.escape(str(payload.get("prerequisite")))
+        fix = html.escape(str(payload.get("fix")))
+        return f"<p>Skipped ({reason}): {fix}</p>"
+    items: list[str] = []
+    for row in payload.get("rows") or []:
+        feature = html.escape(str(row.get("feature")))
+        importance = html.escape(str(row.get("importance")))
+        rate = html.escape(str(row.get("label_flip_rate")))
+        items.append(f"<li>{feature}: {importance} · flip rate {rate}</li>")
+    return f"<ul>{''.join(items) or '<li>None</li>'}</ul>"

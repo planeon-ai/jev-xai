@@ -29,6 +29,8 @@ Search stops at `anchors.precision`, `max_size`, or `call_budget`. `sufficient` 
 
 Immutable features never appear. A feature whose declared domain has only the instance value cannot move the prediction, so it is not a candidate.
 
+An audit pack writes `anchors.json` and `permutation.json`. Pass `--context` (or `context=` in Python) with a `FeatureSpec` to fill them. Without that, the files record the missing prerequisite and the rest of the pack is still written. A call-budget miss is recorded the same way. Counterfactual lines include `replay_confirmed`, which is a second call on the final candidate, not a replay mode.
+
 ## Permutation importance
 
 For each mutable feature, `repeats` draws replace that feature with another value from its domain. Importance is the mean drop in P(original label). `label_flip_rate` is reported even when the model returns no probability; in that case `importance` is null.
