@@ -183,6 +183,7 @@ Raises `AssertionError` when `stability_score` is below `min_score`.
 | `cache_key` | `instance` | cassette/cache key |
 | `cost` | none | `CostEnvelope` |
 | `force_store` | key, `Prediction` | none. Writes the cassette even when cache mode is off |
+| `ignore_cache` | context manager | calls the model and does not write the cache or cassette. Stability measurement uses this |
 
 `max_calls` raises `BudgetExceededError`. Timeout and exhausted retries raise `ModelCallError`.
 
