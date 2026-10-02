@@ -1,0 +1,838 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Accountability layer for JEV-like decision models">
+      
+      
+      
+      
+        <link rel="prev" href="../architecture/">
+      
+      
+        <link rel="next" href="../reproducibility/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Explainability - jev-xai</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#explainability" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="jev-xai" class="md-header__button md-logo" aria-label="jev-xai" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            jev-xai
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Explainability
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="jev-xai" class="md-nav__button md-logo" aria-label="jev-xai" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    jev-xai
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explainability
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explainability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ablation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ablation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#counterfactuals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Counterfactuals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anchors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Anchors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permutation-importance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permutation importance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-shap-and-lime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional SHAP and LIME
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stability_score_v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stability_score_v1
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reproducibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reproducibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auditability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auditability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ablation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ablation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#counterfactuals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Counterfactuals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anchors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Anchors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permutation-importance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permutation importance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-shap-and-lime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional SHAP and LIME
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stability_score_v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stability_score_v1
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="explainability">Explainability</h1>
+<p>Order of evidence, strongest first: counterfactuals and ablation, then stability of those results. Attribution libraries are optional plugins.</p>
+<h2 id="ablation">Ablation</h2>
+<p>Delta P = P(original label) − P(label after the mask). The masking strategy is stored on every row because it changes the number:</p>
+<ul>
+<li>structured fields: <code>drop_key</code>, <code>null</code>, <code>neutral</code>, <code>background</code></li>
+<li>text: <code>deletion</code>, <code>mask_token</code> (<code>[MASK]</code>), <code>neutral_token</code></li>
+</ul>
+<p>Without a <code>FeatureSpec</code>, ablation masks the whole input once.</p>
+<p>Rows with <code>|delta|</code> below the probe noise floor are flagged <code>below_noise_floor</code> and rendered grey in the HTML report. <code>on_below_noise_floor</code> is <code>flag</code>, <code>drop</code>, or <code>error</code>.</p>
+<p>A mask that leaves the input unchanged is <code>noop</code>. <code>delta_p</code> is null and the model is not called. That row is not evidence the feature has no effect: the mask value was already the instance value. A boolean that is already false, under the default neutral mask, is the usual case. No-op rows are left out of the stability ranking and out of <code>ablation_top</code>.</p>
+<h2 id="counterfactuals">Counterfactuals</h2>
+<p>Algorithm: greedy coordinate descent over a per-feature quantile grid, then a sparsity polish that drops any change the decision does not need. Budgets: <code>max_calls</code> / <code>call_budget</code> and <code>max_features_changed</code>.</p>
+<p>Plausibility in V1 means user-supplied ranges and categorical value sets. There is no density model. Immutable features are never changed.</p>
+<p><code>label</code> and <code>flipped</code> come from the search call. <code>confirmed_label</code> is a second <code>predict</code> of that same candidate with the cache bypassed. <code>replay_confirmed</code> is true only when that second label still flips. A budget miss leaves <code>confirmed_label</code> null and <code>replay_confirmed</code> false. <code>success_rate</code> counts only confirmed flips. <code>jev-xai gate</code> fails a pack that contains an unconfirmed flip. This is not a replay mode.</p>
+<h2 id="anchors">Anchors</h2>
+<p>A greedy search builds a short rule that keeps the original label. Each predicate is either <code>eq</code> (boolean, categorical, text) or <code>within</code> a numeric band. Precision is the fraction of seeded samples, with those predicates held, that still predict the original label. Coverage is how often a fully random perturbation satisfies the rule, and that estimate does not call the model.</p>
+<p>Search stops at <code>anchors.precision</code>, <code>max_size</code>, or <code>call_budget</code>. <code>sufficient</code> is true only when precision reached the threshold. Otherwise the best rule found so far is still returned.</p>
+<p>Immutable features never appear. A feature whose declared domain has only the instance value cannot move the prediction, so it is not a candidate.</p>
+<p>An audit pack writes <code>anchors.json</code> and <code>permutation.json</code>. Pass <code>--context</code> (or <code>context=</code> in Python) with a <code>FeatureSpec</code> to fill them. Without that, the files record the missing prerequisite and the rest of the pack is still written. A call-budget miss is recorded the same way.</p>
+<h2 id="permutation-importance">Permutation importance</h2>
+<p>For each mutable feature, <code>repeats</code> draws replace that feature with another value from its domain. Importance is the mean drop in P(original label). <code>label_flip_rate</code> is reported even when the model returns no probability; in that case <code>importance</code> is null.</p>
+<p><code>explain_dataset</code> averages those rows across instances. The call budget is per instance, not across the dataset. Immutable features are skipped.</p>
+<p>A feature that cannot take another value, or that the budget never samples, is <code>unmeasured</code>. Its importance is null. A zero there would not mean the feature had no effect. Unmeasured rows are left out of the stability ranking.</p>
+<h2 id="optional-shap-and-lime">Optional SHAP and LIME</h2>
+<p>These are not core dependencies. <code>pip install jev-xai[shap]</code> and <code>pip install jev-xai[lime]</code> register <code>ShapExplainer</code> and <code>LimeExplainer</code>.</p>
+<p>Both need tabular columns and a background: <code>background_rows</code>, or one <code>background</code> dict. A single background row is a coarse baseline and is named on <code>note</code>. Text fields are skipped. Sampled calls go to <code>model.predict</code> and are counted on <code>cost</code>; they are not written to the cassette.</p>
+<p>KernelSHAP uses the global NumPy RNG. The adapter saves and restores that state around the call. LIME takes <code>random_state</code> from the config seed.</p>
+<p>An audit pack writes <code>shap.json</code> and <code>lime.json</code>. They are filled when the extra is installed, the context has a tabular <code>FeatureSpec</code>, and <code>background</code> or <code>background_rows</code> is set. Otherwise the file records the first missing prerequisite (<code>shap_extra</code>, <code>lime_extra</code>, <code>feature_spec</code>, or <code>background_data</code>). A feature set with no numeric, boolean, or categorical column is recorded as <code>tabular_features</code>. A call-budget miss is recorded the same way. <code>explanation.json</code> lists <code>shap_top</code> and <code>lime_top</code>, at most five features. Text and open categorical columns stay on <code>skipped</code> and are named in the report as columns left out.</p>
+<h2 id="stability_score_v1">stability_score_v1</h2>
+<p>Weights live on <code>StabilityConfig.score_weights</code> and must sum to 1. Defaults:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th style="text-align: right;">Weight</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>rank correlation</td>
+<td style="text-align: right;">0.40</td>
+<td><code>((rho + 1) / 2)</code> where rho is mean pairwise Spearman or Kendall tau-b</td>
+</tr>
+<tr>
+<td>feature overlap</td>
+<td style="text-align: right;">0.30</td>
+<td>mean pairwise Jaccard of the top-k features</td>
+</tr>
+<tr>
+<td>attribution stability</td>
+<td style="text-align: right;">0.20</td>
+<td><code>1 / (1 + mean variance of deltas)</code></td>
+</tr>
+<tr>
+<td>counterfactual consistency</td>
+<td style="text-align: right;">0.10</td>
+<td>fraction of runs whose changed-feature set equals the modal set</td>
+</tr>
+</tbody>
+</table>
+<p>Decision reproducibility is <strong>not</strong> inside this score. It is <code>reproduction_rate</code> on the replay probe.</p>
+<p>Each stability run calls the model. Those calls do not read or write the client cache or the cassette, so an audit that already explained the decision cannot turn a warm cache into a perfect score. The calls still count toward <code>max_calls</code>.</p>
+<p><code>measured_explainer</code> names the explainer that was repeated. An audit pack repeats <code>AblationExplainer</code> only. That score is not evidence that the anchors, permutation, or counterfactuals in the same pack were stable.</p>
+<p>Failed runs are counted. If <code>n_failed / runs</code> exceeds <code>failure_tolerance</code>, evaluation raises.</p>
+<p><code>assert_stable(result, min_score=0.8)</code> and <code>jev-xai gate</code> turn the score into a CI check. The gate walks nested records and audit packs. It fails when stability or reproduction rate is below the threshold, when evidence or behavioral replay <code>matched</code> is false, when a counterfactual flipped without <code>replay_confirmed</code>, or when the directory has none of those fields. Copies under <code>store/</code> are not scored again. To load the assertion helper as a pytest plugin, set <code>pytest_plugins = ["jev_xai.pytest_plugin"]</code> in your project. It is not auto-loaded, so it does not import jev-xai before coverage starts.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
