@@ -13,6 +13,7 @@
 - Permutation marks a feature that was not sampled as `unmeasured` with null importance. A missing alternative or a spent call budget is not reported as zero effect.
 - Counterfactual candidates record `confirmed_label` from the uncached second call. `label` stays the search result, so a reverted confirmation is visible beside the flip.
 - Stability records `measured_explainer`. An audit pack repeats ablation only, and the report names that explainer.
+- Audit packs include SHAP and LIME when the extra, a tabular feature spec, and a background are present. Otherwise `shap.json` and `lime.json` record the missing prerequisite. Text-only inputs are recorded as `tabular_features`.
 
 ## 0.1.0a0
 

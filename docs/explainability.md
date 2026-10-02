@@ -49,6 +49,8 @@ Both need tabular columns and a background: `background_rows`, or one `backgroun
 
 KernelSHAP uses the global NumPy RNG. The adapter saves and restores that state around the call. LIME takes `random_state` from the config seed.
 
+An audit pack writes `shap.json` and `lime.json`. They are filled when the extra is installed, the context has a tabular `FeatureSpec`, and `background` or `background_rows` is set. Otherwise the file records the first missing prerequisite (`shap_extra`, `lime_extra`, `feature_spec`, or `background_data`). A feature set with no numeric, boolean, or categorical column is recorded as `tabular_features`. A call-budget miss is recorded the same way. `explanation.json` lists `shap_top` and `lime_top`, at most five features. Text and open categorical columns stay on `skipped` and are named in the report as columns left out.
+
 ## stability_score_v1
 
 Weights live on `StabilityConfig.score_weights` and must sum to 1. Defaults:
