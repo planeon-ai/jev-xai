@@ -9,6 +9,7 @@ import anyio
 import pytest
 from tests.fakes import FlippedModel, NoPredictModel, ScriptedNoise, ThresholdModel
 
+from jev_xai.adapters.capabilities import Diagnosis, diagnose
 from jev_xai.config.loader import config_hash, load_config
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.errors import (
@@ -484,6 +485,15 @@ def test_audit_pack_merkle_and_hash_only(tmp_path: Path) -> None:
     stability = json.loads((pack / "stability.json").read_text(encoding="utf-8"))
     assert stability["measured_explainer"] == "ablation"
     assert "stability_score_v1 = " in report and "on ablation" in report
+    shap = json.loads((pack / "shap.json").read_text(encoding="utf-8"))
+    lime = json.loads((pack / "lime.json").read_text(encoding="utf-8"))
+    bare = diagnose(ThresholdModel(), input_reachable=True)
+    assert shap["skipped"] is True
+    assert lime["skipped"] is True
+    assert shap["prerequisite"] == _missing(bare, "shap")
+    assert lime["prerequisite"] == _missing(bare, "lime")
+    assert f"Skipped ({shap['prerequisite']})" in report
+    assert "## LIME" in report
     html = (pack / "report.html").read_text(encoding="utf-8")
     assert "on ablation" in html
     assert "<script" not in html
@@ -536,6 +546,12 @@ def test_audit_pack_includes_rules_when_features_exist(tmp_path: Path) -> None:
     assert "verified_user" in {row["feature"] for row in permutation["rows"]}
     assert explanation["anchor_sufficient"] in (True, False)
     assert "verified_user" in explanation["permutation_top"]
+    assert explanation["shap_top"] == []
+    assert explanation["lime_top"] == []
+    held = diagnose(ThresholdModel(), input_reachable=True, context=FEATURES)
+    shap = json.loads((pack / "shap.json").read_text(encoding="utf-8"))
+    assert shap["skipped"] is True
+    assert shap["prerequisite"] == _missing(held, "shap")
     report = (pack / "report.md").read_text(encoding="utf-8")
     assert "replay_confirmed" in report
     assert "## Anchors" in report
@@ -543,6 +559,11 @@ def test_audit_pack_includes_rules_when_features_exist(tmp_path: Path) -> None:
     assert "<script" not in html
     assert "Precision" in html
     assert verify_pack(pack)
+
+
+def _missing(diagnosis: Diagnosis, name: str) -> str:
+    item = next(row for row in diagnosis.explainers if row.name == name)
+    return item.missing[0]
 
 
 def test_audit_records_a_budget_skip() -> None:

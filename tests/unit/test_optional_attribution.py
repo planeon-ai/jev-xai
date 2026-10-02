@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import anyio
 import numpy as np
 import pytest
@@ -11,6 +14,10 @@ from jev_xai.adapters.capabilities import diagnose
 from jev_xai.config.loader import load_config
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.errors import BudgetExceededError, CapabilityError, JevXaiError, JevXaiUsageError
+from jev_xai.evidence.audit import build_audit_pack
+from jev_xai.evidence.html import render_html
+from jev_xai.evidence.report import render_markdown
+from jev_xai.evidence.store import verify_pack
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.lime import LimeExplainer, lime_weights
 from jev_xai.explainers.shap import ShapExplainer, kernel_shap_values
@@ -25,6 +32,7 @@ from jev_xai.explainers.tabular import (
 )
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
+from jev_xai.replay.recorder import DecisionRecorder
 from jev_xai.stability.evaluator import StabilityEvaluator
 
 FEATURES = ExplainContext(
@@ -329,6 +337,128 @@ def test_stability_scores_shap_and_lime(monkeypatch: pytest.MonkeyPatch) -> None
     assert lime.stability_score > 0.9
     assert shap.measured_explainer == "shap"
     assert lime.measured_explainer == "lime"
+
+
+def test_audit_pack_includes_shap_and_lime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install(monkeypatch)
+    monkeypatch.setattr(
+        "jev_xai.explainers.shap.kernel_shap_values",
+        lambda *args, **kwargs: ([0.4, -0.3, 0.05, 0.0], 0.62),
+    )
+    monkeypatch.setattr(
+        "jev_xai.explainers.lime.lime_weights",
+        lambda *args, **kwargs: [(0, 0.5), (1, -0.2)],
+    )
+    config = _audit_config()
+
+    async def build() -> Path:
+        record = await DecisionRecorder(ThresholdModel(), config).run(
+            _instance(),
+            decision_id="audit-shap",
+            timestamp="2026-01-01T00:00:00+00:00",
+        )
+        return await build_audit_pack(
+            record,
+            ThresholdModel(),
+            config,
+            tmp_path / "audit",
+            context=FEATURES,
+        )
+
+    pack = anyio.run(build)
+    shap = json.loads((pack / "shap.json").read_text(encoding="utf-8"))
+    lime = json.loads((pack / "lime.json").read_text(encoding="utf-8"))
+    explanation = json.loads((pack / "explanation.json").read_text(encoding="utf-8"))
+    assert shap.get("skipped") is not True
+    assert lime.get("skipped") is not True
+    assert shap["rows"][0]["feature"] == "verified_user"
+    assert shap["rows"][0]["value"] == pytest.approx(0.4)
+    assert shap["base_value"] == pytest.approx(0.62)
+    assert shap["skipped"] == ["region", "note"]
+    assert lime["rows"][0]["feature"] == "verified_user"
+    assert explanation["shap_top"][0] == "verified_user"
+    assert explanation["lime_top"][0] == "verified_user"
+    report = (pack / "report.md").read_text(encoding="utf-8")
+    html = (pack / "report.html").read_text(encoding="utf-8")
+    assert "## SHAP" in report and "## LIME" in report
+    assert "Columns left out: region, note" in report
+    assert "Columns left out: region, note" in html
+    assert "Base value 0.62." in report
+    assert verify_pack(pack)
+
+
+def test_audit_skips_attribution_without_a_tabular_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install(monkeypatch)
+
+    def explode(*args: object, **kwargs: object) -> object:
+        raise AssertionError("attribution should not run")
+
+    monkeypatch.setattr("jev_xai.explainers.shap.kernel_shap_values", explode)
+    monkeypatch.setattr("jev_xai.explainers.lime.lime_weights", explode)
+    config = _audit_config()
+    context = ExplainContext(
+        features=[FeatureSpec(name="note", kind="text")],
+        background={"note": ""},
+    )
+
+    async def build() -> Path:
+        record = await DecisionRecorder(ThresholdModel(), config).run(
+            {"note": "hello"},
+            decision_id="audit-text",
+            timestamp="2026-01-01T00:00:00+00:00",
+        )
+        return await build_audit_pack(
+            record,
+            ThresholdModel(),
+            config,
+            tmp_path / "audit",
+            context=context,
+        )
+
+    pack = anyio.run(build)
+    shap = json.loads((pack / "shap.json").read_text(encoding="utf-8"))
+    lime = json.loads((pack / "lime.json").read_text(encoding="utf-8"))
+    assert shap["skipped"] is True
+    assert shap["prerequisite"] == "tabular_features"
+    assert lime["prerequisite"] == "tabular_features"
+    report = (pack / "report.md").read_text(encoding="utf-8")
+    assert "Skipped (tabular_features)" in report
+    assert verify_pack(pack)
+
+
+def test_report_names_a_one_row_background() -> None:
+    pack = {
+        "decision": {"output": {}},
+        "shap": {
+            "rows": [{"feature": "verified_user", "value": 0.4}],
+            "skipped": [],
+            "note": "one-row background; attributions are relative to that single baseline",
+            "base_value": 0.5,
+        },
+        "lime": {"rows": [], "skipped": [], "note": ""},
+    }
+    page = render_markdown(pack)
+    html = render_html(pack)
+    assert "one-row background; attributions are relative to that single baseline" in page
+    assert "one-row background; attributions are relative to that single baseline" in html
+    assert "| — | — |" in page
+
+
+def _audit_config() -> JevXaiConfig:
+    return load_config(
+        overrides={
+            "seed": 7,
+            "reproducibility": {"repeat_probe_runs": 0},
+            "model": {"retries": 0, "cache_mode": "off"},
+            "counterfactual": {"call_budget": 40, "max_candidates": 2},
+            "ablation": {"max_spans": 2},
+            "anchors": {"samples": 4, "max_size": 2, "coverage_samples": 8, "call_budget": 40},
+            "permutation": {"repeats": 2, "call_budget": 20},
+            "stability": {"runs": 2},
+        }
+    )
 
 
 async def _evaluate(

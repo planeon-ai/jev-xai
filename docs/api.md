@@ -189,9 +189,13 @@ Raises `AssertionError` when `stability_score` is below `min_score`.
 
 ## Audit
 
-### `build_audit_pack(record, model, config, directory, *, context=None) -> Path`
+### `build_audit_pack(record, model, config, directory, *, context=None, store=None) -> Path`
 
-Requires `record.input` to be a dict. Runs ablation, counterfactual search, stability (at most 3 runs of ablation; `measured_explainer` records that), evidence replay, and behavioral replay. Writes `decision.json`, `explanation.json`, `ablation.json`, `counterfactuals.json`, `stability.json`, `replay.json`, `manifest.json`, `report.md`, and `report.html` under `directory`. Returns that directory. `manifest.json` carries `schema_version`, `jev_xai_version`, `config_hash`, member hashes, `merkle_root`, and `LIMITATIONS`.
+Requires a reachable dict input. Runs ablation, counterfactual search, anchors, permutation, SHAP, LIME, stability (at most 3 runs of ablation; `measured_explainer` records that), evidence replay, and behavioral replay.
+
+Anchors and permutation need a `FeatureSpec`. SHAP and LIME also need the optional extra, a tabular column, and background rows. When a prerequisite is missing, or the call budget is spent, that member is `{explainer, skipped: true, prerequisite, fix}` and the rest of the pack is still written. Text-only features skip SHAP and LIME with `tabular_features`.
+
+Writes `decision.json`, `explanation.json`, `ablation.json`, `counterfactuals.json`, `anchors.json`, `permutation.json`, `shap.json`, `lime.json`, `stability.json`, `replay.json`, `manifest.json`, `report.md`, and `report.html` under `directory`. `explanation.json` includes `shap_top` and `lime_top`. Returns that directory. `manifest.json` carries `schema_version`, `jev_xai_version`, `config_hash`, member hashes, `merkle_root`, and `LIMITATIONS`.
 
 ## Errors
 

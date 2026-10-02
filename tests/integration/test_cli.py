@@ -135,6 +135,10 @@ def test_plugins_doctor_import_record_explain_replay_diff_audit_gate_bench(tmp_p
     assert (tmp_path / "audit" / "manifest.json").is_file()
     skipped_anchors = json.loads((tmp_path / "audit" / "anchors.json").read_text(encoding="utf-8"))
     assert skipped_anchors["skipped"] is True
+    skipped_shap = json.loads((tmp_path / "audit" / "shap.json").read_text(encoding="utf-8"))
+    skipped_lime = json.loads((tmp_path / "audit" / "lime.json").read_text(encoding="utf-8"))
+    assert skipped_shap["skipped"] is True
+    assert skipped_lime["skipped"] is True
 
     gate_dir = tmp_path / "gate"
     gate_dir.mkdir()

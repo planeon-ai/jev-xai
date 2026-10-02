@@ -62,6 +62,10 @@ def render_markdown(pack: dict[str, Any]) -> str:
     lines.extend(_anchor_lines(pack.get("anchors") or {}))
     lines.extend(["", "## Permutation", ""])
     lines.extend(_permutation_lines(pack.get("permutation") or {}))
+    lines.extend(["", "## SHAP", ""])
+    lines.extend(_attribution_lines(pack.get("shap") or {}, "value", "Value"))
+    lines.extend(["", "## LIME", ""])
+    lines.extend(_attribution_lines(pack.get("lime") or {}, "weight", "Weight"))
     stability = pack.get("stability", {})
     lines.extend(
         [
@@ -121,4 +125,27 @@ def _permutation_lines(payload: dict[str, Any]) -> list[str]:
         lines.append(f"| {row.get('feature')} | {importance} | {row.get('label_flip_rate')} |")
     if len(lines) == 2:
         lines.append("| — | — | — |")
+    return lines
+
+
+def _attribution_lines(payload: dict[str, Any], value_key: str, heading: str) -> list[str]:
+    if payload.get("skipped") is True:
+        return [f"Skipped ({payload.get('prerequisite')}): {payload.get('fix')}"]
+    lines = [
+        f"| Feature | {heading} |",
+        "| --- | ---: |",
+    ]
+    for row in payload.get("rows") or []:
+        lines.append(f"| {row.get('feature')} | {row.get(value_key)} |")
+    if len(lines) == 2:
+        lines.append("| — | — |")
+    omitted = payload.get("skipped") or []
+    if isinstance(omitted, list) and omitted:
+        lines.extend(["", "Columns left out: " + ", ".join(str(name) for name in omitted)])
+    note = payload.get("note")
+    if note:
+        lines.extend(["", str(note)])
+    base = payload.get("base_value")
+    if base is not None:
+        lines.append(f"Base value {base}.")
     return lines

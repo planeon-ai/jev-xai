@@ -47,6 +47,8 @@ def render_html(pack: dict[str, Any]) -> str:
         )
     anchors = _anchor_html(pack.get("anchors") or {})
     permutation = _permutation_html(pack.get("permutation") or {})
+    shap = _attribution_html(pack.get("shap") or {}, "value")
+    lime = _attribution_html(pack.get("lime") or {}, "weight")
     stability = pack.get("stability", {})
     replay = pack.get("replay", {})
     banner = ""
@@ -82,6 +84,8 @@ small {{ color: #57534e; }}
 <div class="panel"><h2>Counterfactuals</h2><ul>{"".join(changes) or "<li>None</li>"}</ul></div>
 <div class="panel"><h2>Anchors</h2>{anchors}</div>
 <div class="panel"><h2>Permutation</h2>{permutation}</div>
+<div class="panel"><h2>SHAP</h2>{shap}</div>
+<div class="panel"><h2>LIME</h2>{lime}</div>
 <div class="panel"><h2>Stability</h2>
 <p>stability_score_v1 {html.escape(str(stability.get("stability_score")))}
 on {html.escape(str(stability.get("measured_explainer") or "unspecified explainer"))}</p></div>
@@ -129,3 +133,24 @@ def _permutation_html(payload: dict[str, Any]) -> str:
         rate = html.escape(str(row.get("label_flip_rate")))
         items.append(f"<li>{feature}: {importance} · flip rate {rate}</li>")
     return f"<ul>{''.join(items) or '<li>None</li>'}</ul>"
+
+
+def _attribution_html(payload: dict[str, Any], value_key: str) -> str:
+    if payload.get("skipped") is True:
+        reason = html.escape(str(payload.get("prerequisite")))
+        fix = html.escape(str(payload.get("fix")))
+        return f"<p>Skipped ({reason}): {fix}</p>"
+    items: list[str] = []
+    for row in payload.get("rows") or []:
+        feature = html.escape(str(row.get("feature")))
+        value = html.escape(str(row.get(value_key)))
+        items.append(f"<li>{feature}: {value}</li>")
+    omitted = payload.get("skipped") or []
+    extra = ""
+    if isinstance(omitted, list) and omitted:
+        names = ", ".join(html.escape(str(name)) for name in omitted)
+        extra += f"<p>Columns left out: {names}</p>"
+    note = payload.get("note")
+    if note:
+        extra += f"<p>{html.escape(str(note))}</p>"
+    return f"<ul>{''.join(items) or '<li>None</li>'}</ul>{extra}"

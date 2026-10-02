@@ -8,6 +8,10 @@ audit/
 ├── explanation.json
 ├── counterfactuals.json
 ├── ablation.json
+├── anchors.json
+├── permutation.json
+├── shap.json
+├── lime.json
 ├── stability.json
 ├── replay.json
 ├── manifest.json
@@ -18,6 +22,8 @@ audit/
 `manifest.json` lists member hashes, a Merkle root, the library version, `schema_version`, `config_hash`, and the limitations text. `verify_pack` recomputes the root. Tampering with a member fails verification.
 
 `stability.json` records `measured_explainer`. The audit pack repeats ablation only, so that score is not a claim about the other explainers in the pack.
+
+`shap.json` and `lime.json` are filled when the optional extra, a tabular feature spec, and a background are present. Otherwise they record the missing prerequisite. Sampled attribution calls are counted and are not written to the cassette.
 
 Objects in the store are addressed by blake2b of canonical JSON. Writes use a temporary file and `replace`.
 

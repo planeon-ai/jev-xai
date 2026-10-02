@@ -17,7 +17,10 @@ from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.base import Explainer
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.lime import LimeExplainer
 from jev_xai.explainers.permutation import PermutationExplainer
+from jev_xai.explainers.shap import ShapExplainer
+from jev_xai.explainers.tabular import tabular_columns
 from jev_xai.model.cassette import Cassette
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
@@ -37,7 +40,9 @@ async def build_audit_pack(
     """Write an audit pack, including a verifiable manifest.
 
     Anchors and permutation are included when ``context`` has a ``FeatureSpec``.
-    Otherwise those members record the missing prerequisite and the pack is still written.
+    SHAP and LIME are included when that spec has a tabular column, a background is set,
+    and the optional extra is installed. Otherwise those members record the missing
+    prerequisite and the pack is still written.
     The stability score repeats ablation only. ``measured_explainer`` records that name.
     """
 
@@ -64,6 +69,8 @@ async def build_audit_pack(
     counterfactual = await CounterfactualExplainer(config).explain(client, instance, context)
     anchors = await _optional(AnchorExplainer(config), client, instance, context)
     permutation = await _optional(PermutationExplainer(config), client, instance, context)
+    shap = await _attribution(ShapExplainer(config), client, instance, context)
+    lime = await _attribution(LimeExplainer(config), client, instance, context)
     stability = await StabilityEvaluator(config).evaluate(
         AblationExplainer(config),
         model,
@@ -81,6 +88,8 @@ async def build_audit_pack(
         "counterfactuals": counterfactual.model_dump(mode="json"),
         "anchors": anchors,
         "permutation": permutation,
+        "shap": shap,
+        "lime": lime,
         "stability": stability.model_dump(mode="json"),
         "replay": {
             "evidence": replay.model_dump(mode="json"),
@@ -94,6 +103,8 @@ async def build_audit_pack(
             "ablation_top": [row.feature for row in ablation.rows if not row.noop][:5],
             "anchor_sufficient": None if anchors.get("skipped") else anchors.get("sufficient"),
             "permutation_top": _permutation_top(permutation),
+            "shap_top": _attribution_top(shap, "value"),
+            "lime_top": _attribution_top(lime, "weight"),
             "config_hash": config_hash(config),
         },
     }
@@ -105,6 +116,8 @@ async def build_audit_pack(
         "ablation.json": pack["ablation"],
         "anchors.json": pack["anchors"],
         "permutation.json": pack["permutation"],
+        "shap.json": pack["shap"],
+        "lime.json": pack["lime"],
         "stability.json": pack["stability"],
         "replay.json": pack["replay"],
     }
@@ -123,6 +136,8 @@ async def build_audit_pack(
         "ablation.json",
         "anchors.json",
         "permutation.json",
+        "shap.json",
+        "lime.json",
         "stability.json",
         "replay.json",
         "manifest.json",
@@ -163,9 +178,35 @@ async def _optional(
     return result.model_dump(mode="json")
 
 
+async def _attribution(
+    explainer: Explainer,
+    client: ModelClient,
+    instance: dict[str, Any],
+    context: ExplainContext | None,
+) -> dict[str, Any]:
+    """Run SHAP or LIME, or record the missing extra, background, or tabular column."""
+
+    if context is not None and context.features and not tabular_columns(context)[0]:
+        return {
+            "explainer": explainer.name,
+            "skipped": True,
+            "prerequisite": "tabular_features",
+            "fix": "declare a numeric, boolean, or categorical feature",
+        }
+    return await _optional(explainer, client, instance, context)
+
+
 def _permutation_top(payload: dict[str, Any]) -> list[str]:
     if payload.get("skipped"):
         return []
     rows = [row for row in payload.get("rows") or [] if not row.get("unmeasured")]
     rows.sort(key=lambda row: abs(row.get("importance") or 0.0), reverse=True)
+    return [str(row.get("feature")) for row in rows[:5]]
+
+
+def _attribution_top(payload: dict[str, Any], key: str) -> list[str]:
+    if payload.get("skipped") is True:
+        return []
+    rows = list(payload.get("rows") or [])
+    rows.sort(key=lambda row: abs(float(row.get(key) or 0.0)), reverse=True)
     return [str(row.get("feature")) for row in rows[:5]]
