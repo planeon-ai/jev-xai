@@ -7,6 +7,10 @@ JevXaiConfig
     -> ModelClient (batching, cassette, cost)
         -> AblationExplainer
         -> CounterfactualExplainer
+        -> AnchorExplainer
+        -> PermutationExplainer
+        -> ShapExplainer (optional extra)
+        -> LimeExplainer (optional extra)
             -> StabilityEvaluator
 DecisionRecorder -> EvidenceStore -> audit pack
 ReplayEngine: evidence replay | behavioral reproduction | cross-version diff
@@ -20,7 +24,7 @@ Plugins:
 - `jev_xai.adapters`
 - `jev_xai.sources`
 
-SHAP, LIME, and OpenTelemetry importers are out-of-tree plugins against those groups.
+SHAP and LIME are optional in-tree extras (`jev-xai[shap]`, `jev-xai[lime]`). OpenTelemetry importers stay out-of-tree plugins against those groups.
 
 ## Sync and async
 

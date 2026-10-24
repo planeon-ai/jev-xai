@@ -6,4 +6,4 @@
 Decision -> Reproduce -> Perturb -> Counterfactually challenge -> Explain -> Measure stability -> Generate evidence
 ```
 
-Start with [architecture](architecture.md), [prerequisites](prerequisites.md), and [configuration](configuration.md).
+Start with the [API](api.md), then [architecture](architecture.md), [prerequisites](prerequisites.md), and [configuration](configuration.md).

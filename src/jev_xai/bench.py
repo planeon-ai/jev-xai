@@ -13,8 +13,10 @@ import anyio
 from jev_xai.adapters.callable import CallableAdapter
 from jev_xai.config.loader import load_config
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.permutation import PermutationExplainer
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
 from jev_xai.stability.evaluator import StabilityEvaluator
@@ -133,12 +135,73 @@ async def run_benchmarks(quick: bool = False, tasks: list[str] | None = None) ->
                 "cache_hits": client.cost().cache_hits,
             }
         )
+        rows.extend(await _anchor_rows(name, predict, instance, context, quick))
     return {
         "schema_version": "1.0.0",
         "quick": quick,
         "note": "Measured numbers replace the qualitative comparison table in the project spec section 17.",
         "tasks": rows,
     }
+
+
+async def _anchor_rows(
+    name: str,
+    predict: Any,
+    instance: dict[str, Any],
+    context: ExplainContext,
+    quick: bool,
+) -> list[dict[str, Any]]:
+    """Separate client so the quick profile's max_calls budget stays on the main row."""
+
+    profile = "quick" if quick else "ci-gate"
+    config = load_config(
+        profile=profile,
+        overrides={
+            "reproducibility": {"repeat_probe_runs": 0},
+            "anchors": {
+                "samples": 4,
+                "coverage_samples": 8,
+                "max_size": 2,
+                "call_budget": 40,
+                "precision": 0.9,
+            },
+            "permutation": {"repeats": 2, "call_budget": 20},
+            "model": {"max_calls": 80, "retries": 0, "cache_mode": "memory"},
+        },
+    )
+    model = CallableAdapter(
+        predict,
+        metadata={
+            "provider": "bench",
+            "model_name": name,
+            "model_version": "1",
+            "fingerprint": name,
+        },
+        proba_fn=_probabilities(predict),
+    )
+    client = ModelClient(
+        model, config.model, fingerprint=model_fingerprint(model), seed=config.seed
+    )
+    anchor = await AnchorExplainer(config).explain(client, instance, context)
+    permutation = await PermutationExplainer(config).explain(client, instance, context)
+    flip_rate = max((row.label_flip_rate for row in permutation.rows), default=0.0)
+    return [
+        {
+            "task": name,
+            "explainer": "anchors",
+            "n_model_calls": anchor.cost.n_model_calls,
+            "precision": anchor.precision,
+            "coverage": anchor.coverage,
+            "sufficient": anchor.sufficient,
+            "anchor_size": len(anchor.predicates),
+        },
+        {
+            "task": name,
+            "explainer": "permutation",
+            "n_model_calls": permutation.cost.n_model_calls,
+            "flip_rate": flip_rate,
+        },
+    ]
 
 
 def write_benchmarks(path: Path, *, quick: bool = False) -> dict[str, Any]:

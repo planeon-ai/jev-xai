@@ -17,9 +17,13 @@ from jev_xai.config.loader import config_hash
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.errors import JevXaiError
 from jev_xai.explainers.ablation import AblationResult
+from jev_xai.explainers.anchors import AnchorResult
 from jev_xai.explainers.base import Explainer, ExplanationResult
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualResult
+from jev_xai.explainers.lime import LimeResult, LimeRow
+from jev_xai.explainers.permutation import PermutationResult, PermutationRow
+from jev_xai.explainers.shap import ShapResult, ShapRow
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
 from jev_xai.replay.seeding import spawn_seeds
@@ -29,6 +33,7 @@ from jev_xai.types import CostEnvelope
 
 class StabilityResult(ExplanationResult):
     explainer: str = "stability"
+    measured_explainer: str
     runs: int
     n_failed_runs: int = 0
     failures: list[str] = Field(default_factory=list)
@@ -69,9 +74,10 @@ class StabilityEvaluator:
             except Exception as exc:
                 failures.append(f"run {index}: {exc}")
 
-        async with anyio.create_task_group() as group:
-            for index, seed in enumerate(seeds):
-                group.start_soon(one, index, seed)
+        with shared.ignore_cache():
+            async with anyio.create_task_group() as group:
+                for index, seed in enumerate(seeds):
+                    group.start_soon(one, index, seed)
 
         failed = len(failures)
         if total and failed / total > self.config.stability.failure_tolerance:
@@ -82,6 +88,7 @@ class StabilityEvaluator:
         successful = [item for item in results if item is not None]
         score = _score(successful, self.config)
         return StabilityResult(
+            measured_explainer=explainer.name,
             runs=total,
             n_failed_runs=failed,
             failures=failures,
@@ -113,17 +120,19 @@ class StabilityEvaluator:
         shared = client or _client(model, self.config)
         collected: list[ExplanationResult] = []
         failures: list[str] = []
-        for index, seed in enumerate(seeds):
-            try:
-                collected.append(
-                    await _with_seed(explainer, seed).explain(shared, dict(instance), context)
-                )
-            except Exception as exc:
-                failures.append(f"run {index}: {exc}")
+        with shared.ignore_cache():
+            for index, seed in enumerate(seeds):
+                try:
+                    collected.append(
+                        await _with_seed(explainer, seed).explain(shared, dict(instance), context)
+                    )
+                except Exception as exc:
+                    failures.append(f"run {index}: {exc}")
         if total and len(failures) / total > self.config.stability.failure_tolerance:
             raise JevXaiError("stability failure tolerance exceeded")
         score = _score(collected, self.config)
         return StabilityResult(
+            measured_explainer=explainer.name,
             runs=total,
             n_failed_runs=len(failures),
             failures=failures,
@@ -163,13 +172,14 @@ def _vectors(
     change_sets: list[frozenset[str]] = []
     for result in results:
         if isinstance(result, AblationResult):
+            measured = [row for row in result.rows if not row.noop]
             ordered = sorted(
-                result.rows,
+                measured,
                 key=lambda row: abs(row.delta_p) if row.delta_p is not None else -1.0,
                 reverse=True,
             )
             rankings.append([row.feature for row in ordered])
-            attributions.append({row.feature: row.delta_p or 0.0 for row in result.rows})
+            attributions.append({row.feature: row.delta_p or 0.0 for row in measured})
             change_sets.append(frozenset())
         elif isinstance(result, CounterfactualResult):
             if result.candidates:
@@ -179,6 +189,27 @@ def _vectors(
             rankings.append(features)
             attributions.append({name: float(index + 1) for index, name in enumerate(features)})
             change_sets.append(frozenset(features))
+        elif isinstance(result, AnchorResult):
+            names = [predicate.feature for predicate in result.predicates]
+            rankings.append(names)
+            attributions.append({name: result.precision for name in names})
+            change_sets.append(frozenset(names))
+        elif isinstance(result, PermutationResult):
+            measured_rows = [row for row in result.rows if not row.unmeasured]
+            ranked = _sort_permutations(measured_rows)
+            rankings.append([row.feature for row in ranked])
+            attributions.append({row.feature: row.importance or 0.0 for row in measured_rows})
+            change_sets.append(frozenset())
+        elif isinstance(result, ShapResult):
+            ranked_shap = _sort_shap(result.rows)
+            rankings.append([row.feature for row in ranked_shap])
+            attributions.append({row.feature: row.value for row in result.rows})
+            change_sets.append(frozenset())
+        elif isinstance(result, LimeResult):
+            ranked_lime = _sort_lime(result.rows)
+            rankings.append([row.feature for row in ranked_lime])
+            attributions.append({row.feature: row.weight for row in result.rows})
+            change_sets.append(frozenset())
         else:
             rankings.append([])
             attributions.append({})
@@ -236,6 +267,24 @@ def _score(results: list[ExplanationResult], config: JevXaiConfig) -> dict[str, 
         "counterfactual_consistency": consistency,
         "stability_score": max(0.0, min(1.0, score)),
     }
+
+
+def _sort_permutations(rows: list[PermutationRow]) -> list[PermutationRow]:
+    return sorted(rows, key=_permutation_rank, reverse=True)
+
+
+def _sort_shap(rows: list[ShapRow]) -> list[ShapRow]:
+    return sorted(rows, key=lambda row: abs(row.value), reverse=True)
+
+
+def _sort_lime(rows: list[LimeRow]) -> list[LimeRow]:
+    return sorted(rows, key=lambda row: abs(row.weight), reverse=True)
+
+
+def _permutation_rank(row: PermutationRow) -> float:
+    if row.importance is None:
+        return -1.0
+    return abs(row.importance)
 
 
 def _rank_vector(ranking: list[str], universe: list[str]) -> list[float]:

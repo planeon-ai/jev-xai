@@ -133,6 +133,12 @@ def test_plugins_doctor_import_record_explain_replay_diff_audit_gate_bench(tmp_p
     assert audited.exit_code == 0, audited.output
     assert (tmp_path / "audit" / "report.html").is_file()
     assert (tmp_path / "audit" / "manifest.json").is_file()
+    skipped_anchors = json.loads((tmp_path / "audit" / "anchors.json").read_text(encoding="utf-8"))
+    assert skipped_anchors["skipped"] is True
+    skipped_shap = json.loads((tmp_path / "audit" / "shap.json").read_text(encoding="utf-8"))
+    skipped_lime = json.loads((tmp_path / "audit" / "lime.json").read_text(encoding="utf-8"))
+    assert skipped_shap["skipped"] is True
+    assert skipped_lime["skipped"] is True
 
     gate_dir = tmp_path / "gate"
     gate_dir.mkdir()
@@ -162,3 +168,114 @@ def test_plugins_doctor_import_record_explain_replay_diff_audit_gate_bench(tmp_p
     assert benched.exit_code == 0, benched.output
     payload = json.loads((tmp_path / "bench.json").read_text(encoding="utf-8"))
     assert {row["task"] for row in payload["tasks"]} == {"tabular_fraud", "text_safety", "routing"}
+    assert any(row["explainer"] == "anchors" for row in payload["tasks"])
+    assert any(row["explainer"] == "permutation" for row in payload["tasks"])
+
+
+def test_explain_anchors_permutation_and_unknown(tmp_path: Path) -> None:
+    case = tmp_path / "case.json"
+    case.write_text(
+        json.dumps(
+            {
+                "verified_user": True,
+                "sanctions_match": False,
+                "transaction_amount": 0,
+                "note": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    context = tmp_path / "context.json"
+    context.write_text(
+        json.dumps(
+            {
+                "features": [
+                    {"name": "verified_user", "kind": "boolean"},
+                    {"name": "sanctions_match", "kind": "boolean"},
+                    {
+                        "name": "transaction_amount",
+                        "kind": "numeric",
+                        "allowed_range": [0, 50000],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = tmp_path / "jev-xai.toml"
+    config.write_text(
+        "\n".join(
+            [
+                "seed = 7",
+                "[model]",
+                "max_calls = 200",
+                "retries = 0",
+                'cache_mode = "memory"',
+                "[anchors]",
+                "samples = 4",
+                "coverage_samples = 8",
+                "max_size = 2",
+                "call_budget = 80",
+                "precision = 0.9",
+                "[permutation]",
+                "repeats = 2",
+                "call_budget = 20",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    anchored = runner.invoke(
+        app,
+        [
+            "explain",
+            "--model",
+            "tests.fakes:ThresholdModel",
+            "--input",
+            str(case),
+            "--explainer",
+            "anchors",
+            "--context",
+            str(context),
+            "--config",
+            str(config),
+            "--format",
+            "json",
+        ],
+    )
+    assert anchored.exit_code == 0, anchored.output
+    assert "anchors" in anchored.stdout
+    permuted = runner.invoke(
+        app,
+        [
+            "explain",
+            "--model",
+            "tests.fakes:ThresholdModel",
+            "--input",
+            str(case),
+            "--explainer",
+            "permutation",
+            "--context",
+            str(context),
+            "--config",
+            str(config),
+            "--format",
+            "json",
+        ],
+    )
+    assert permuted.exit_code == 0, permuted.output
+    assert "permutation" in permuted.stdout
+    unknown = runner.invoke(
+        app,
+        [
+            "explain",
+            "--model",
+            "tests.fakes:ThresholdModel",
+            "--input",
+            str(case),
+            "--explainer",
+            "not-an-explainer",
+            "--format",
+            "json",
+        ],
+    )
+    assert unknown.exit_code != 0

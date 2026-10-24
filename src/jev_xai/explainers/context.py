@@ -29,6 +29,7 @@ class ExplainContext(BaseModel):
     groups: dict[str, list[str]] = Field(default_factory=dict)
     target_label: str | None = None
     background: dict[str, Any] | None = None
+    background_rows: list[dict[str, Any]] = Field(default_factory=list)
     text_field: str | None = None
 
     def feature(self, name: str) -> FeatureSpec | None:
