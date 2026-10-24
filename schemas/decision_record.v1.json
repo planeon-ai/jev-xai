@@ -251,7 +251,7 @@
       "type": "object"
     }
   },
-  "description": "One replayable decision.\n\n``input`` is null when the pack was written hash-only or the payload was\nexternalized. ``input_hash`` is always present.",
+  "description": "One replayable decision.\n\n``input`` is null when the pack was written hash-only. An oversized payload\nis ``{\"external_hash\": ...}``; it is reachable when that object was written\nto an evidence store. ``input_hash`` is always of the pre-redaction input.",
   "properties": {
     "schema_version": {
       "default": "1.0.0",

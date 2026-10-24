@@ -9,10 +9,18 @@ import anyio
 import pytest
 from tests.fakes import FlippedModel, NoPredictModel, ScriptedNoise, ThresholdModel
 
+from jev_xai.adapters.capabilities import Diagnosis, diagnose
 from jev_xai.config.loader import config_hash, load_config
 from jev_xai.config.schema import JevXaiConfig
-from jev_xai.errors import CapabilityError, JevXaiError, ReplayMismatchError, SchemaVersionError
-from jev_xai.evidence.audit import build_audit_pack
+from jev_xai.errors import (
+    BudgetExceededError,
+    CapabilityError,
+    JevXaiError,
+    JevXaiUsageError,
+    ReplayMismatchError,
+    SchemaVersionError,
+)
+from jev_xai.evidence.audit import _optional, build_audit_pack
 from jev_xai.evidence.redaction import prepare_input
 from jev_xai.evidence.schema import (
     DecisionRecord,
@@ -23,6 +31,7 @@ from jev_xai.evidence.schema import (
 )
 from jev_xai.evidence.store import EvidenceStore, verify_pack
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext, FeatureSpec
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
 from jev_xai.model.cassette import Cassette
@@ -109,6 +118,11 @@ def test_ablation_delta_and_call_count() -> None:
     by_name = {row.feature: row for row in result.rows}
     assert by_name["verified_user"].delta_p is not None
     assert by_name["verified_user"].delta_p > 0
+    assert by_name["verified_user"].noop is False
+    sanctions = by_name["sanctions_match"]
+    assert sanctions.noop is True
+    assert sanctions.delta_p is None
+    assert sanctions.ablated_probability is None
     assert any(row.scope == "group" for row in result.rows)
     assert any(row.scope == "text_span" for row in result.rows)
     assert result.masking_policy["structured"] == "neutral"
@@ -139,7 +153,7 @@ def test_noise_floor_flags_tiny_deltas() -> None:
         probe = await ReproducibilityProbe(config).measure(client, instance, reference_label="SAFE")
         context = ExplainContext(
             features=[
-                FeatureSpec(name="tiny", kind="numeric", baseline=0),
+                FeatureSpec(name="tiny", kind="numeric", baseline=1),
                 FeatureSpec(name="risk", kind="numeric", baseline=0),
             ]
         )
@@ -169,8 +183,95 @@ def test_counterfactual_respects_immutable_features_and_can_flip() -> None:
     free = _cfg()
     client = _client(ThresholdModel(), free)
     found = anyio.run(CounterfactualExplainer(free).explain, client, unsafe, FEATURES)
-    assert any(candidate.flipped and candidate.replay_confirmed for candidate in found.candidates)
+    confirmed = [candidate for candidate in found.candidates if candidate.replay_confirmed]
+    assert confirmed
+    assert all(candidate.confirmed_label == candidate.label for candidate in confirmed)
+    assert found.success_rate > 0
     assert found.cost.n_model_calls <= free.counterfactual.call_budget
+
+
+def test_second_call_can_refuse_a_flip() -> None:
+    class Reverts:
+        def __init__(self) -> None:
+            self.seen: dict[str, int] = {}
+
+        def predict(self, instance: dict[str, object]) -> dict[str, object]:
+            key = json.dumps(instance, sort_keys=True, default=str)
+            count = self.seen.get(key, 0) + 1
+            self.seen[key] = count
+            verified = bool(instance.get("verified_user"))
+            sanctions = bool(instance.get("sanctions_match"))
+            probability = 0.2 if count >= 2 or not verified or sanctions else 0.9
+            label = "SAFE" if probability >= 0.5 else "UNSAFE"
+            return {
+                "label": label,
+                "probability": probability,
+                "probabilities": {"SAFE": probability, "UNSAFE": 1 - probability},
+            }
+
+        def metadata(self) -> dict[str, str]:
+            return {
+                "provider": "toy",
+                "model_name": "reverts",
+                "model_version": "1",
+                "fingerprint": "reverts-v1",
+            }
+
+    config = _cfg()
+    found = anyio.run(
+        CounterfactualExplainer(config).explain,
+        _client(Reverts(), config),
+        {
+            "verified_user": False,
+            "sanctions_match": True,
+            "transaction_amount": 40000,
+            "note": "",
+        },
+        FEATURES,
+    )
+    refused = [
+        candidate
+        for candidate in found.candidates
+        if candidate.flipped and not candidate.replay_confirmed
+    ]
+    assert refused
+    assert all(candidate.confirmed_label not in (None, candidate.label) for candidate in refused)
+    assert found.success_rate == 0
+
+
+def test_confirmation_is_not_claimed_when_the_model_budget_is_spent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = ModelClient.predict
+
+    async def wrapped(
+        self: ModelClient, instance: dict[str, object], *, use_cache: bool = True
+    ) -> object:
+        if not use_cache:
+            raise BudgetExceededError("model call budget exhausted")
+        return await original(self, instance, use_cache=use_cache)
+
+    monkeypatch.setattr(ModelClient, "predict", wrapped)
+    config = _cfg()
+    found = anyio.run(
+        CounterfactualExplainer(config).explain,
+        _client(ThresholdModel(), config),
+        {
+            "verified_user": False,
+            "sanctions_match": True,
+            "transaction_amount": 40000,
+            "note": "",
+        },
+        FEATURES,
+    )
+    missed = [
+        candidate
+        for candidate in found.candidates
+        if candidate.flipped and not candidate.replay_confirmed
+    ]
+    assert missed
+    assert all(candidate.confirmed_label is None for candidate in missed)
+    assert found.success_rate == 0
 
 
 def test_stability_parallel_matches_sequential_and_formula() -> None:
@@ -197,9 +298,55 @@ def test_stability_parallel_matches_sequential_and_formula() -> None:
         item["rows"] for item in sequential.explanations
     ]
     assert parallel.formula == "stability_score_v1"
+    assert parallel.explainer == "stability"
+    assert parallel.measured_explainer == "ablation"
+    assert sequential.measured_explainer == "ablation"
     assert_stable(parallel, min_score=0.8)
     helper = run(explain_with_stability, explainer, model, instance, config, context=FEATURES)
     assert helper.stability_score == pytest.approx(parallel.stability_score)
+    assert helper.measured_explainer == "ablation"
+
+
+def test_stability_measures_the_model_not_the_warm_cache() -> None:
+    class Counting(ThresholdModel):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def predict(self, instance: dict[str, object]) -> dict[str, object]:
+            self.calls += 1
+            return super().predict(instance)
+
+    config = _cfg(stability={"runs": 2, "failure_tolerance": 0})
+    model = Counting()
+    client = _client(model, config)
+    instance = _safe_input()
+    run(AblationExplainer(config).explain, client, instance, FEATURES)
+    warmed = model.calls
+    assert warmed > 0
+    run(
+        StabilityEvaluator(config).evaluate,
+        AblationExplainer(config),
+        model,
+        instance,
+        runs=1,
+        context=FEATURES,
+        client=client,
+    )
+    first_run = model.calls - warmed
+    assert first_run > 0
+    run(
+        StabilityEvaluator(config).evaluate,
+        AblationExplainer(config),
+        model,
+        instance,
+        runs=1,
+        context=FEATURES,
+        client=client,
+    )
+    assert model.calls - warmed - first_run == first_run
+    cached = model.calls
+    run(client.predict, instance)
+    assert model.calls == cached
 
 
 def test_stability_partial_failure() -> None:
@@ -250,6 +397,33 @@ def test_record_evidence_replay_and_behavioral_reproduction(tmp_path: Path) -> N
     assert live.claim == "behavioral_reproduction"
     assert live.matched
     raise_on_mismatch(live)
+
+
+def test_cross_replay_and_externalized_input(tmp_path: Path) -> None:
+    config = _cfg(evidence={"max_inline_input_bytes": 16})
+    model = ThresholdModel()
+    bare = run(DecisionRecorder(model, config).run, _safe_input(), decision_id="inline-hash")
+    assert bare.input_externalized is True
+    assert bare.input_reachable is False
+    store = EvidenceStore(tmp_path / "store")
+    record = run(
+        DecisionRecorder(model, config, store=store).run,
+        _safe_input(),
+        decision_id="stored",
+    )
+    assert record.input_externalized is True
+    assert record.input_reachable is True
+    assert isinstance(record.input, dict)
+    digest = str(record.input["external_hash"])
+    assert store.get_object(digest)["verified_user"] is True
+    live = run(ReplayEngine(config, store=store).replay, record, model=model, mode="cross")
+    assert live.mode == "cross"
+    assert live.claim == "behavioral_reproduction"
+    assert live.matched
+    with pytest.raises(ReplayMismatchError):
+        run(ReplayEngine(config).replay, record, model=model, mode="current")
+    with pytest.raises(JevXaiUsageError):
+        run(ReplayEngine(config).replay, record, model=model, mode="counterfactual")
 
 
 def test_mismatch_classifies_model_version_change(tmp_path: Path) -> None:
@@ -303,7 +477,25 @@ def test_audit_pack_merkle_and_hash_only(tmp_path: Path) -> None:
         encoding="utf-8"
     ).lower() or "does not reveal" in (pack / "manifest.json").read_text(encoding="utf-8")
     assert verify_pack(pack)
+    skipped = json.loads((pack / "anchors.json").read_text(encoding="utf-8"))
+    assert skipped["skipped"] is True
+    assert skipped["prerequisite"] == "feature_spec"
+    report = (pack / "report.md").read_text(encoding="utf-8")
+    assert "Skipped (feature_spec)" in report
+    stability = json.loads((pack / "stability.json").read_text(encoding="utf-8"))
+    assert stability["measured_explainer"] == "ablation"
+    assert "stability_score_v1 = " in report and "on ablation" in report
+    shap = json.loads((pack / "shap.json").read_text(encoding="utf-8"))
+    lime = json.loads((pack / "lime.json").read_text(encoding="utf-8"))
+    bare = diagnose(ThresholdModel(), input_reachable=True)
+    assert shap["skipped"] is True
+    assert lime["skipped"] is True
+    assert shap["prerequisite"] == _missing(bare, "shap")
+    assert lime["prerequisite"] == _missing(bare, "lime")
+    assert f"Skipped ({shap['prerequisite']})" in report
+    assert "## LIME" in report
     html = (pack / "report.html").read_text(encoding="utf-8")
+    assert "on ablation" in html
     assert "<script" not in html
     decision = json.loads((pack / "decision.json").read_text(encoding="utf-8"))
     decision["output"]["label"] = "TAMPERED"
@@ -325,6 +517,69 @@ def test_audit_pack_merkle_and_hash_only(tmp_path: Path) -> None:
     store = EvidenceStore(tmp_path / "store")
     key = store.put_object({"a": 1})
     assert store.get_object(key) == {"a": 1}
+
+
+def test_audit_pack_includes_rules_when_features_exist(tmp_path: Path) -> None:
+    config = _cfg(
+        stability={"runs": 2},
+        anchors={"samples": 4, "max_size": 2, "coverage_samples": 8, "call_budget": 40},
+        permutation={"repeats": 2, "call_budget": 20},
+    )
+    record = run(
+        DecisionRecorder(ThresholdModel(), config).run,
+        _safe_input(),
+        decision_id="audit-rules",
+        timestamp="2026-01-01T00:00:00+00:00",
+    )
+    pack = run(
+        build_audit_pack,
+        record,
+        ThresholdModel(),
+        config,
+        tmp_path / "audit",
+        context=FEATURES,
+    )
+    anchors = json.loads((pack / "anchors.json").read_text(encoding="utf-8"))
+    permutation = json.loads((pack / "permutation.json").read_text(encoding="utf-8"))
+    explanation = json.loads((pack / "explanation.json").read_text(encoding="utf-8"))
+    assert anchors.get("skipped") is not True
+    assert "verified_user" in {row["feature"] for row in permutation["rows"]}
+    assert explanation["anchor_sufficient"] in (True, False)
+    assert "verified_user" in explanation["permutation_top"]
+    assert explanation["shap_top"] == []
+    assert explanation["lime_top"] == []
+    held = diagnose(ThresholdModel(), input_reachable=True, context=FEATURES)
+    shap = json.loads((pack / "shap.json").read_text(encoding="utf-8"))
+    assert shap["skipped"] is True
+    assert shap["prerequisite"] == _missing(held, "shap")
+    report = (pack / "report.md").read_text(encoding="utf-8")
+    assert "replay_confirmed" in report
+    assert "## Anchors" in report
+    html = (pack / "report.html").read_text(encoding="utf-8")
+    assert "<script" not in html
+    assert "Precision" in html
+    assert verify_pack(pack)
+
+
+def _missing(diagnosis: Diagnosis, name: str) -> str:
+    item = next(row for row in diagnosis.explainers if row.name == name)
+    return item.missing[0]
+
+
+def test_audit_records_a_budget_skip() -> None:
+    config = _cfg()
+    client = _client(ThresholdModel(), config)
+
+    class Spent(AnchorExplainer):
+        async def explain(
+            self, client: ModelClient, instance: object, context: object = None
+        ) -> object:
+            raise BudgetExceededError("model call budget exhausted")
+
+    payload = run(_optional, Spent(config), client, _safe_input(), FEATURES)
+    assert payload["skipped"] is True
+    assert payload["prerequisite"] == "call_budget"
+    assert payload["explainer"] == "anchors"
 
 
 def test_schema_version_and_trace_roundtrip() -> None:

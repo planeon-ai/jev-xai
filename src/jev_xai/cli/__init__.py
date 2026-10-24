@@ -16,11 +16,16 @@ from jev_xai.cli.render import render
 from jev_xai.config.loader import config_hash, load_config
 from jev_xai.config.schema import JevXaiConfig
 from jev_xai.evidence.audit import build_audit_pack
+from jev_xai.evidence.gate import gate_failures
 from jev_xai.evidence.schema import read_record
-from jev_xai.evidence.store import verify_pack
+from jev_xai.evidence.store import EvidenceStore, verify_pack
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.lime import LimeExplainer
+from jev_xai.explainers.permutation import PermutationExplainer
+from jev_xai.explainers.shap import ShapExplainer
 from jev_xai.model.cassette import Cassette
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
@@ -106,13 +111,15 @@ def record(
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     cassette_dir: Path | None = typer.Option(None, "--cassette"),
+    store_dir: Path | None = typer.Option(None, "--store"),
 ) -> None:
     """Record one decision."""
 
     payload = json.loads(input.read_text(encoding="utf-8"))
     resolved = _config(profile, config)
     cassette = Cassette(cassette_dir) if cassette_dir else None
-    recorder = DecisionRecorder(_model(model), resolved, cassette=cassette)
+    store = EvidenceStore(store_dir) if store_dir else None
+    recorder = DecisionRecorder(_model(model), resolved, cassette=cassette, store=store)
     result = run_sync(recorder.run, payload)
     out.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     typer.echo(str(out))
@@ -123,11 +130,12 @@ def explain(
     model: str = typer.Option(..., "--model"),
     input: Path = typer.Option(..., "--input"),
     explainer: str = typer.Option("ablation", "--explainer"),
+    context_path: Path | None = typer.Option(None, "--context", help="ExplainContext JSON"),
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     fmt: str = typer.Option("table", "--format"),
 ) -> None:
-    """Run one explainer."""
+    """Run one explainer. Anchors, permutation, SHAP, and LIME need ``--context``."""
 
     payload = json.loads(input.read_text(encoding="utf-8"))
     resolved = _config(profile, config)
@@ -135,12 +143,22 @@ def explain(
     client = ModelClient(
         live, resolved.model, fingerprint=model_fingerprint(live), seed=resolved.seed
     )
-    engine: Any
-    if explainer == "counterfactual":
-        engine = CounterfactualExplainer(resolved)
-    else:
-        engine = AblationExplainer(resolved)
-    result = run_sync(engine.explain, client, payload, ExplainContext())
+    engines = {
+        "ablation": AblationExplainer,
+        "counterfactual": CounterfactualExplainer,
+        "anchors": AnchorExplainer,
+        "permutation": PermutationExplainer,
+        "shap": ShapExplainer,
+        "lime": LimeExplainer,
+    }
+    if explainer not in engines:
+        raise typer.BadParameter(
+            "explainer must be ablation, counterfactual, anchors, permutation, shap, or lime"
+        )
+    context = ExplainContext()
+    if context_path is not None:
+        context = ExplainContext.model_validate_json(context_path.read_text(encoding="utf-8"))
+    result = run_sync(engines[explainer](resolved).explain, client, payload, context)
     _emit(result, fmt)
 
 
@@ -152,16 +170,21 @@ def replay(
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     cassette_dir: Path | None = typer.Option(None, "--cassette"),
+    store_dir: Path | None = typer.Option(None, "--store"),
     fmt: str = typer.Option("json", "--format"),
 ) -> None:
-    """Replay a record. exact is evidence replay; current is behavioral reproduction."""
+    """Replay a record. exact is evidence; current and cross re-invoke the model."""
 
     record = read_record(json.loads(path.read_text(encoding="utf-8")))
     resolved = _config(profile, config)
     cassette = Cassette(cassette_dir) if cassette_dir else None
+    store = EvidenceStore(store_dir) if store_dir else None
     live = _model(model) if model else None
     result = run_sync(
-        ReplayEngine(resolved, cassette=cassette).replay, record, model=live, mode=mode
+        ReplayEngine(resolved, cassette=cassette, store=store).replay,
+        record,
+        model=live,
+        mode=mode,
     )
     _emit(result, fmt)
 
@@ -172,6 +195,7 @@ def diff(
     model: str = typer.Option(..., "--model"),
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
+    store_dir: Path | None = typer.Option(None, "--store"),
     fmt: str = typer.Option("json", "--format"),
 ) -> None:
     """Cross-version decision-flip report."""
@@ -179,7 +203,8 @@ def diff(
     paths = sorted(records.glob("*.json"))
     loaded = [read_record(json.loads(path.read_text(encoding="utf-8"))) for path in paths]
     resolved = _config(profile, config)
-    report = run_sync(cross_version_diff, loaded, _model(model), resolved)
+    store = EvidenceStore(store_dir) if store_dir else None
+    report = run_sync(cross_version_diff, loaded, _model(model), resolved, store=store)
     _emit(report, fmt)
 
 
@@ -188,14 +213,32 @@ def audit(
     path: Path = typer.Argument(..., help="decision.json"),
     model: str = typer.Option(..., "--model"),
     out: Path = typer.Option(Path("audit"), "--out"),
+    context_path: Path | None = typer.Option(None, "--context", help="ExplainContext JSON"),
     profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
+    store_dir: Path | None = typer.Option(None, "--store"),
 ) -> None:
-    """Write an audit pack with a Merkle manifest, Markdown, and HTML."""
+    """Write an audit pack with a Merkle manifest, Markdown, and HTML.
+
+    ``--context`` is required for anchors and permutation. Without it those
+    pack members record the missing prerequisite.
+    """
 
     record = read_record(json.loads(path.read_text(encoding="utf-8")))
     resolved = _config(profile, config)
-    run_sync(build_audit_pack, record, _model(model), resolved, out)
+    store = EvidenceStore(store_dir) if store_dir else None
+    context = None
+    if context_path is not None:
+        context = ExplainContext.model_validate_json(context_path.read_text(encoding="utf-8"))
+    run_sync(
+        build_audit_pack,
+        record,
+        _model(model),
+        resolved,
+        out,
+        context=context,
+        store=store,
+    )
     ok = verify_pack(out)
     typer.echo(f"{out} verified={ok} config_hash={config_hash(resolved)}")
 
@@ -206,22 +249,13 @@ def gate(
     min_stability: float = typer.Option(0.8, "--min-stability"),
     min_reproduction_rate: float = typer.Option(0.9, "--min-reproduction-rate"),
 ) -> None:
-    """Fail when stability or reproduction rate is below the threshold."""
+    """Fail when stability, reproduction, or replay evidence misses the threshold."""
 
-    failures: list[str] = []
-    for path in sorted(records.glob("*.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if "stability_score" in payload:
-            if float(payload["stability_score"]) < min_stability:
-                failures.append(f"{path.name}: stability {payload['stability_score']}")
-        if "reproduction_rate" in payload:
-            if float(payload["reproduction_rate"]) < min_reproduction_rate:
-                failures.append(f"{path.name}: reproduction_rate {payload['reproduction_rate']}")
-        if path.name == "decision.json" or "reproducibility" in payload:
-            probe = payload.get("reproducibility") or {}
-            rate = probe.get("reproduction_rate")
-            if rate is not None and float(rate) < min_reproduction_rate:
-                failures.append(f"{path.name}: reproduction_rate {rate}")
+    failures = gate_failures(
+        records,
+        min_stability=min_stability,
+        min_reproduction_rate=min_reproduction_rate,
+    )
     if failures:
         typer.echo("\n".join(failures))
         raise typer.Exit(code=1)
