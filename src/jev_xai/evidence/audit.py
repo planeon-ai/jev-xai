@@ -7,13 +7,20 @@ from typing import Any
 
 from jev_xai.config.loader import config_hash
 from jev_xai.config.schema import JevXaiConfig
+from jev_xai.errors import BudgetExceededError, CapabilityError, ReplayMismatchError
 from jev_xai.evidence.html import render_html
 from jev_xai.evidence.report import render_markdown
 from jev_xai.evidence.schema import DecisionRecord
 from jev_xai.evidence.store import EvidenceStore
 from jev_xai.explainers.ablation import AblationExplainer
+from jev_xai.explainers.anchors import AnchorExplainer
+from jev_xai.explainers.base import Explainer
 from jev_xai.explainers.context import ExplainContext
 from jev_xai.explainers.counterfactual import CounterfactualExplainer
+from jev_xai.explainers.lime import LimeExplainer
+from jev_xai.explainers.permutation import PermutationExplainer
+from jev_xai.explainers.shap import ShapExplainer
+from jev_xai.explainers.tabular import tabular_columns
 from jev_xai.model.cassette import Cassette
 from jev_xai.model.client import ModelClient
 from jev_xai.model.fingerprint import model_fingerprint
@@ -28,11 +35,26 @@ async def build_audit_pack(
     directory: Path,
     *,
     context: ExplainContext | None = None,
+    store: EvidenceStore | None = None,
 ) -> Path:
-    """Write the V1 audit pack, including a verifiable manifest."""
+    """Write an audit pack, including a verifiable manifest.
 
-    if not isinstance(record.input, dict):
+    Anchors and permutation are included when ``context`` has a ``FeatureSpec``.
+    SHAP and LIME are included when that spec has a tabular column, a background is set,
+    and the optional extra is installed. Otherwise those members record the missing
+    prerequisite and the pack is still written.
+    The stability score repeats ablation only. ``measured_explainer`` records that name.
+    """
+
+    if record.input_externalized:
+        try:
+            instance = ReplayEngine(config, store=store)._resolve_input(record)
+        except ReplayMismatchError as exc:
+            raise ValueError(str(exc)) from exc
+    elif not isinstance(record.input, dict):
         raise ValueError("audit requires a reachable dict input on the decision record")
+    else:
+        instance = record.input
     cassette = Cassette(directory / "cassette")
     client = ModelClient(
         model,
@@ -43,24 +65,31 @@ async def build_audit_pack(
     )
     if record.reproducibility is not None:
         client.noise_floor = record.reproducibility.noise_floor
-    ablation = await AblationExplainer(config).explain(client, record.input, context)
-    counterfactual = await CounterfactualExplainer(config).explain(client, record.input, context)
+    ablation = await AblationExplainer(config).explain(client, instance, context)
+    counterfactual = await CounterfactualExplainer(config).explain(client, instance, context)
+    anchors = await _optional(AnchorExplainer(config), client, instance, context)
+    permutation = await _optional(PermutationExplainer(config), client, instance, context)
+    shap = await _attribution(ShapExplainer(config), client, instance, context)
+    lime = await _attribution(LimeExplainer(config), client, instance, context)
     stability = await StabilityEvaluator(config).evaluate(
         AblationExplainer(config),
         model,
-        record.input,
+        instance,
         runs=min(config.stability.runs, 3),
         context=context,
         client=client,
     )
-    replay = await ReplayEngine(config, cassette=cassette).replay(record, model=model, mode="exact")
-    behavioral = await ReplayEngine(config, cassette=cassette).replay(
-        record, model=model, mode="current"
-    )
+    replay_engine = ReplayEngine(config, cassette=cassette, store=store)
+    replay = await replay_engine.replay(record, model=model, mode="exact")
+    behavioral = await replay_engine.replay(record, model=model, mode="current")
     pack = {
         "decision": record.model_dump(mode="json"),
         "ablation": ablation.model_dump(mode="json"),
         "counterfactuals": counterfactual.model_dump(mode="json"),
+        "anchors": anchors,
+        "permutation": permutation,
+        "shap": shap,
+        "lime": lime,
         "stability": stability.model_dump(mode="json"),
         "replay": {
             "evidence": replay.model_dump(mode="json"),
@@ -71,7 +100,11 @@ async def build_audit_pack(
             "note": replay.note,
         },
         "explanation": {
-            "ablation_top": [row.feature for row in ablation.rows[:5]],
+            "ablation_top": [row.feature for row in ablation.rows if not row.noop][:5],
+            "anchor_sufficient": None if anchors.get("skipped") else anchors.get("sufficient"),
+            "permutation_top": _permutation_top(permutation),
+            "shap_top": _attribution_top(shap, "value"),
+            "lime_top": _attribution_top(lime, "weight"),
             "config_hash": config_hash(config),
         },
     }
@@ -81,6 +114,10 @@ async def build_audit_pack(
         "explanation.json": pack["explanation"],
         "counterfactuals.json": pack["counterfactuals"],
         "ablation.json": pack["ablation"],
+        "anchors.json": pack["anchors"],
+        "permutation.json": pack["permutation"],
+        "shap.json": pack["shap"],
+        "lime.json": pack["lime"],
         "stability.json": pack["stability"],
         "replay.json": pack["replay"],
     }
@@ -97,6 +134,10 @@ async def build_audit_pack(
         "explanation.json",
         "counterfactuals.json",
         "ablation.json",
+        "anchors.json",
+        "permutation.json",
+        "shap.json",
+        "lime.json",
         "stability.json",
         "replay.json",
         "manifest.json",
@@ -108,3 +149,64 @@ async def build_audit_pack(
         if source.resolve() != target.resolve():
             target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     return flat
+
+
+async def _optional(
+    explainer: Explainer,
+    client: ModelClient,
+    instance: dict[str, Any],
+    context: ExplainContext | None,
+) -> dict[str, Any]:
+    """Run an explainer, or record why this pack cannot include it."""
+
+    try:
+        result = await explainer.explain(client, instance, context)
+    except CapabilityError as exc:
+        return {
+            "explainer": explainer.name,
+            "skipped": True,
+            "prerequisite": exc.prerequisite,
+            "fix": exc.fix,
+        }
+    except BudgetExceededError:
+        return {
+            "explainer": explainer.name,
+            "skipped": True,
+            "prerequisite": "call_budget",
+            "fix": "raise model.max_calls or lower the explainer call_budget",
+        }
+    return result.model_dump(mode="json")
+
+
+async def _attribution(
+    explainer: Explainer,
+    client: ModelClient,
+    instance: dict[str, Any],
+    context: ExplainContext | None,
+) -> dict[str, Any]:
+    """Run SHAP or LIME, or record the missing extra, background, or tabular column."""
+
+    if context is not None and context.features and not tabular_columns(context)[0]:
+        return {
+            "explainer": explainer.name,
+            "skipped": True,
+            "prerequisite": "tabular_features",
+            "fix": "declare a numeric, boolean, or categorical feature",
+        }
+    return await _optional(explainer, client, instance, context)
+
+
+def _permutation_top(payload: dict[str, Any]) -> list[str]:
+    if payload.get("skipped"):
+        return []
+    rows = [row for row in payload.get("rows") or [] if not row.get("unmeasured")]
+    rows.sort(key=lambda row: abs(row.get("importance") or 0.0), reverse=True)
+    return [str(row.get("feature")) for row in rows[:5]]
+
+
+def _attribution_top(payload: dict[str, Any], key: str) -> list[str]:
+    if payload.get("skipped") is True:
+        return []
+    rows = list(payload.get("rows") or [])
+    rows.sort(key=lambda row: abs(float(row.get(key) or 0.0)), reverse=True)
+    return [str(row.get("feature")) for row in rows[:5]]

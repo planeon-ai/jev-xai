@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from jev_xai.explainers.context import ExplainContext
+from jev_xai.explainers.tabular import extra_installed
 
 
 class ExplainerAvailability(BaseModel):
@@ -39,6 +40,9 @@ _FIXES = {
     "calibrated_probabilities": "return probability from predict, or implement predict_proba",
     "model_fingerprint": "include fingerprint or model_version in metadata()",
     "record_corpus": "record a directory of decisions before cross-version replay",
+    "background_data": "pass context.background_rows, or a single context.background baseline",
+    "shap_extra": "pip install jev-xai[shap]",
+    "lime_extra": "pip install jev-xai[lime]",
 }
 
 
@@ -95,7 +99,10 @@ def diagnose(
                 tier = 3
     notes: list[str] = []
     if reinvocation and input_reachable and not feature_spec:
-        notes.append("no FeatureSpec: ablation is limited to a single whole-input mask")
+        notes.append(
+            "no FeatureSpec: ablation is limited to a single whole-input mask; "
+            "anchors and permutation stay off"
+        )
     if reinvocation and input_reachable and not probabilities:
         notes.append("no probabilities: ablation reports label flips and omits delta-P")
 
@@ -124,6 +131,24 @@ def diagnose(
     if not has_corpus:
         longitudinal_missing.append("record_corpus")
 
+    spec_missing = list(behavioral_missing)
+    if not feature_spec:
+        spec_missing.append("feature_spec")
+    has_background = bool(context and (context.background_rows or context.background))
+
+    def optional_missing(module: str, extra_key: str) -> list[str]:
+        missing: list[str] = []
+        if not extra_installed(module):
+            missing.append(extra_key)
+        missing.extend(graded_missing)
+        if not feature_spec:
+            missing.append("feature_spec")
+        if not has_background:
+            missing.append("background_data")
+        return missing
+
+    shap_missing = optional_missing("shap", "shap_extra")
+    lime_missing = optional_missing("lime", "lime_extra")
     explainers = [
         availability("record", True, []),
         availability(
@@ -134,6 +159,30 @@ def diagnose(
         ),
         availability("ablation", tier >= 1, behavioral_missing),
         availability("counterfactual", tier >= 1, behavioral_missing),
+        availability(
+            "anchors",
+            tier >= 1 and feature_spec,
+            spec_missing,
+            note="precision is estimated with model samples; coverage does not call the model",
+        ),
+        availability(
+            "permutation",
+            tier >= 1 and feature_spec,
+            spec_missing,
+            note="importance uses class probability when the model returns one",
+        ),
+        availability(
+            "shap",
+            not shap_missing,
+            shap_missing,
+            note="optional extra; KernelSHAP samples are not written to the cassette",
+        ),
+        availability(
+            "lime",
+            not lime_missing,
+            lime_missing,
+            note="optional extra; LIME samples are not written to the cassette",
+        ),
         availability("stability", tier >= 2, graded_missing),
         availability("cross_version_replay", tier >= 3, longitudinal_missing),
     ]

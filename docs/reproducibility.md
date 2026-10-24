@@ -6,8 +6,11 @@ Two claims, labeled differently in `replay.json`:
 | --- | --- | --- |
 | `evidence_replay` | `exact` | The cassette (or the stored output) is what was recorded. Zero model calls. |
 | `behavioral_reproduction` | `current` | The live model still produces that label, and the probability within tolerance. |
+| `behavioral_reproduction` | `cross` | The supplied model, which may be a different version, is re-invoked on one record. |
 
-Cross-version replay is `jev-xai diff --records ./records --model module:factory`. It reports decision flips. If `config_hash` differs from the recorded config, the report says so instead of pretending the comparison is isolated.
+`counterfactual` is not a replay mode. A directory comparison is `jev-xai diff --records ./records --model module:factory`. It reports decision flips. If `config_hash` differs from the recorded config, the report says so instead of pretending the comparison is isolated.
+
+An oversized input is replayable when `DecisionRecorder` was given an evidence store. Replay and diff then need that same store.
 
 ## Repeat probe
 
