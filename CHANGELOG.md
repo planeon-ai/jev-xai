@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Anchors: greedy high-precision rules over `FeatureSpec` predicates, with precision from seeded model samples and coverage that does not call the model.
+- Permutation importance: local sensitivity and a dataset average. Importance is the mean drop in P(original label). Label flip rate is still reported when the model returns no probability.
+- Optional SHAP and LIME adapters (`jev-xai[shap]`, `jev-xai[lime]`). They are not core dependencies. Sampled calls are counted and are not written to the cassette.
+- Replay mode `cross` re-invokes one record on the supplied model. `counterfactual` is rejected. Oversized inputs written to an evidence store can be loaded back for replay, diff, and audit.
+- Ablation marks a mask that does not change the input as `noop` and does not call the model for it. `jev-xai gate` walks nested packs, fails on an unmatched replay, and fails closed when a directory has no stability, reproduction, or replay evidence.
+- Audit packs include anchors and permutation when a `FeatureSpec` is supplied. Without one, or when the call budget is exhausted, those members record why they were skipped. Reports show `replay_confirmed` on counterfactual candidates.
+- `replay_confirmed` is an uncached second call of the finished counterfactual. `success_rate` counts only that confirmation. `jev-xai gate` fails when a candidate flipped and the confirmation did not.
+- Stability runs call the model instead of a warm cache, and they do not write those calls back to the cache or the cassette.
+- Permutation marks a feature that was not sampled as `unmeasured` with null importance. A missing alternative or a spent call budget is not reported as zero effect.
+- Counterfactual candidates record `confirmed_label` from the uncached second call. `label` stays the search result, so a reverted confirmation is visible beside the flip.
+- Stability records `measured_explainer`. An audit pack repeats ablation only, and the report names that explainer.
+- Audit packs include SHAP and LIME when the extra, a tabular feature spec, and a background are present. Otherwise `shap.json` and `lime.json` record the missing prerequisite. Text-only inputs are recorded as `tabular_features`.
+
 ## 0.1.0a0
 
 Initial alpha of the accountability layer: configurable ablation and counterfactual evidence, cassette-backed evidence replay, live behavioral reproduction, cross-version diff, stability scoring (`stability_score_v1`), content-addressed audit packs, and a CLI.
