@@ -96,6 +96,39 @@ def _default_formats() -> list[Literal["json", "md", "html", "table"]]:
     return ["json", "md", "html"]
 
 
+class AnchorConfig(_Strict):
+    """Greedy anchor search. ``precision`` is the stopping threshold."""
+
+    precision: float = 0.95
+    max_size: int = 4
+    samples: int = 16
+    coverage_samples: int = 64
+    numeric_band: float = 0.2
+    call_budget: int = 200
+
+
+class PermutationConfig(_Strict):
+    """Local permutation importance. ``call_budget`` applies per instance."""
+
+    repeats: int = 8
+    call_budget: int = 200
+
+
+class ShapConfig(_Strict):
+    """KernelSHAP. Used only when the ``shap`` extra is installed."""
+
+    nsamples: int = 64
+    call_budget: int = 500
+
+
+class LimeConfig(_Strict):
+    """LIME tabular regression. Used only when the ``lime`` extra is installed."""
+
+    num_features: int = 5
+    num_samples: int = 64
+    call_budget: int = 500
+
+
 class ReplayConfig(_Strict):
     mode: Literal["exact", "current", "cross", "counterfactual"] = "exact"
 
@@ -116,6 +149,10 @@ class JevXaiConfig(_Strict):
     model: ModelClientConfig = Field(default_factory=ModelClientConfig)
     ablation: AblationConfig = Field(default_factory=AblationConfig)
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
+    anchors: AnchorConfig = Field(default_factory=AnchorConfig)
+    permutation: PermutationConfig = Field(default_factory=PermutationConfig)
+    shap: ShapConfig = Field(default_factory=ShapConfig)
+    lime: LimeConfig = Field(default_factory=LimeConfig)
     stability: StabilityConfig = Field(default_factory=StabilityConfig)
     reproducibility: ReproducibilityConfig = Field(default_factory=ReproducibilityConfig)
     replay: ReplayConfig = Field(default_factory=ReplayConfig)
